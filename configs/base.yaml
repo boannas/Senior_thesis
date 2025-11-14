@@ -1,0 +1,42 @@
+# World configuration file
+
+seed: 42    # Random seed for reproducibility
+fps: 30   # Frames per second for rendering
+
+grid:
+  width: 15     
+  height: 15  
+  cell_px: 50 
+
+# Agent positions
+mother:
+  start: [7, 7]   # initial position [x, y]
+
+child:
+  start: [8, 7]   # initial position [x, y]
+
+# Entity positions
+food:
+  positions:      # List of food positions
+    - [3, 3]
+    - [11, 3]
+    - [3, 11]
+    - [11, 11]
+
+threats:
+  positions:      # List of threat positions
+    - [5, 5]
+    - [9, 9]
+
+nest:
+  position: [7, 13]   # Nest position [x, y]
+
+colors:
+  bg:   [255, 255, 255]       
+  grid: [220, 220, 220]    
+  mother: [235, 87, 87]      
+  child: [87, 87, 235]        
+  food: [76, 175, 80]         
+  threat: [200, 200, 200]      
+  nest: [255, 193, 7]        
+  outline: [120, 120, 120]    # [R, G, B] for entity outlines

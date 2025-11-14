@@ -1,106 +1,256 @@
-# main.py
-import pygame
-import sys
+"""
+Side-by-side population dynamics in Pygame.
+Supports two birth modes:
+  - "global": environment-level spawns (Poisson rate per second)
+  - "per_agent": each agent reproduces independently (per-second chance)
+"""
+import math
 import random
+import pygame
+from dataclasses import dataclass, field
 
-# -------- Config --------
-GRID_W, GRID_H = 15, 15        # cells
-CELL = 50                      # pixels per cell
-FPS = 30
-SEED = 42                      # reproducible spawn, if you randomize later
+# ------------------ Config ------------------
+SEED = 42
+FPS  = 60
+DT   = 20 / FPS                 # fixed-step seconds per tick
 
-# Colors (RGB)
-BG   = (248, 248, 248)
-GRID = (220, 220, 220)
-AGNT = (235, 87, 87)           # red-ish
-OUTL = (120, 120, 120)
+# Canvas
+W, H = 1200, 720
+MARGIN = 40
+PANEL_W = 500
+PANEL_H = 520
+GAP = 40
 
-# -------- Core State --------
+# Panels (edit here)
+LEFT_CFG = dict(
+    name="Blue",
+    color=(70, 130, 180),
+    birth_mode="global",   # "global" or "per_agent"
+    env_birth_rate=1.0,    # expected new agents per second (if global)
+    birth_rate=1.00,       # per-agent births/sec (if per_agent)
+    death_rate=0.10,       # per-agent deaths/sec
+    start_n=1
+)
+RIGHT_CFG = dict(
+    name="Orange",
+    color=(255, 160, 50),
+    birth_mode="global",
+    env_birth_rate=0.8,
+    birth_rate=0.80,
+    death_rate=0.02,
+    start_n=1
+)
+
+# Motion
+SPEED_MIN, SPEED_MAX = 20.0, 60.0    # px/s
+JITTER = 30.0                        # random heading jitter (deg/s)
+RADIUS = 16
+
+BG      = (28, 31, 36)
+PANELBG = (245, 245, 245)
+PANELBD = (210, 210, 210)
+TEXT    = (245, 235, 120)
+
+random.seed(SEED)
+
+# ------------------ Helpers ------------------
+def rate_to_step_prob(rate_per_sec: float, dt: float) -> float:
+    """Convert continuous-time Poisson rate λ to per-step event probability."""
+    return 1.0 - math.exp(-max(rate_per_sec, 0.0) * dt)
+
+def sample_poisson(lmbda: float) -> int:
+    """Knuth's algorithm to sample k ~ Poisson(lambda) without numpy."""
+    if lmbda <= 0: 
+        return 0
+    L = math.exp(-lmbda)
+    k, p = 0, 1.0
+    while p > L:
+        k += 1
+        p *= random.random()
+    return k - 1
+
+def clamp(v, lo, hi): 
+    return max(lo, min(hi, v))
+
+# ------------------ Model ------------------
+@dataclass
 class Agent:
-    def __init__(self, x, y):
-        self.x, self.y = x, y
+    x: float
+    y: float
+    vx: float
+    vy: float
+    age: float = 0.0
 
-    def move(self, dx, dy):
-        # Clamp to grid bounds
-        self.x = max(0, min(GRID_W - 1, self.x + dx))
-        self.y = max(0, min(GRID_H - 1, self.y + dy))
+    @staticmethod
+    def random(panel_rect):
+        x = random.uniform(panel_rect.left + RADIUS, panel_rect.right - RADIUS)
+        y = random.uniform(panel_rect.top + RADIUS,  panel_rect.bottom - RADIUS)
+        speed = random.uniform(SPEED_MIN, SPEED_MAX)
+        ang = random.uniform(0, 2*math.pi)
+        return Agent(x, y, speed*math.cos(ang), speed*math.sin(ang))
 
-class World:
-    def __init__(self, seed=SEED):
-        random.seed(seed)
-        self.t = 0
-        # Spawn agent at center
-        self.agent = Agent(GRID_W // 2, GRID_H // 2)
+    def step_motion(self, rect, dt):
+        # heading jitter
+        ang = math.atan2(self.vy, self.vx)
+        ang += math.radians(random.uniform(-JITTER, JITTER) * dt)
+        speed = (self.vx**2 + self.vy**2) ** 0.5
+        self.vx, self.vy = speed*math.cos(ang), speed*math.sin(ang)
 
-    def step(self, action: int):
-        """
-        action: 0=stay, 1=up, 2=down, 3=left, 4=right
-        """
-        moves = {0: (0, 0), 1: (0, -1), 2: (0, 1), 3: (-1, 0), 4: (1, 0)}
-        dx, dy = moves.get(action, (0, 0))
-        self.agent.move(dx, dy)
-        self.t += 1
+        # move
+        self.x += self.vx * dt
+        self.y += self.vy * dt
 
-# -------- Rendering --------
-def draw_grid(surface: pygame.Surface):
-    surface.fill(BG)
-    # Outer border
-    pygame.draw.rect(surface, OUTL, (0, 0, GRID_W * CELL, GRID_H * CELL), width=2)
-    # Internal grid lines
-    for x in range(1, GRID_W):
-        pygame.draw.line(surface, GRID, (x * CELL, 0), (x * CELL, GRID_H * CELL))
-    for y in range(1, GRID_H):
-        pygame.draw.line(surface, GRID, (0, y * CELL), (GRID_W * CELL, y * CELL))
+        # bounce on panel edges
+        if self.x < rect.left + RADIUS:  self.x = rect.left + RADIUS;  self.vx = abs(self.vx)
+        if self.x > rect.right - RADIUS: self.x = rect.right - RADIUS; self.vx = -abs(self.vx)
+        if self.y < rect.top + RADIUS:   self.y = rect.top + RADIUS;   self.vy = abs(self.vy)
+        if self.y > rect.bottom - RADIUS:self.y = rect.bottom - RADIUS;self.vy = -abs(self.vy)
 
-def draw_agent(surface: pygame.Surface, agent: Agent):
-    cx = agent.x * CELL + CELL // 2
-    cy = agent.y * CELL + CELL // 2
-    r = CELL // 3
-    pygame.draw.circle(surface, AGNT, (cx, cy), r)
-    pygame.draw.circle(surface, OUTL, (cx, cy), r, width=2)
+        self.age += dt
 
-# -------- Main Loop --------
+@dataclass
+class Population:
+    rect: pygame.Rect
+    color: tuple
+    birth_rate: float                 # per-agent births/sec (used if per_agent)
+    death_rate: float                 # per-agent deaths/sec
+    birth_mode: str = "per_agent"     # "per_agent" or "global"
+    env_birth_rate: float = 0.0       # expected spawns/sec if global mode
+    agents: list[Agent] = field(default_factory=list)
+
+    def reset(self, n: int):
+        self.agents = [Agent.random(self.rect) for _ in range(n)]
+
+    def step(self, dt):
+        # motion & aging
+        for a in self.agents:
+            a.step_motion(self.rect, dt)
+
+        # per-agent death
+        p_death = rate_to_step_prob(self.death_rate, dt)
+        survivors: list[Agent] = [a for a in self.agents if random.random() >= p_death]
+
+        newborns: list[Agent] = []
+
+        if self.birth_mode == "per_agent":
+            # per-agent reproduction near parent
+            p_birth = rate_to_step_prob(self.birth_rate, dt)
+            for a in survivors:
+                if random.random() < p_birth:
+                    jitter = 2 * RADIUS
+                    nx = clamp(a.x + random.uniform(-jitter, jitter), self.rect.left+RADIUS, self.rect.right-RADIUS)
+                    ny = clamp(a.y + random.uniform(-jitter, jitter), self.rect.top +RADIUS, self.rect.bottom-RADIUS)
+                    speed = random.uniform(SPEED_MIN, SPEED_MAX)
+                    ang = random.uniform(0, 2*math.pi)
+                    newborns.append(Agent(nx, ny, speed*math.cos(ang), speed*math.sin(ang)))
+        else:
+            # GLOBAL SPAWNS: k ~ Poisson(env_birth_rate * dt), anywhere in panel
+            k = sample_poisson(self.env_birth_rate * dt)
+            for _ in range(k):
+                newborns.append(Agent.random(self.rect))
+
+        self.agents = survivors + newborns
+
+    def stats(self):
+        n = len(self.agents)
+        avg_age = sum(a.age for a in self.agents)/n if n else 0.0
+        birth_txt = (f"{int(self.birth_rate*100)}%" if self.birth_mode=="per_agent"
+                     else f"{self.env_birth_rate:.2f}/s")
+        return n, avg_age, birth_txt
+
+# ------------------ View ------------------
+def draw_panel(surface, rect, pop: Population, title_text, font):
+    pygame.draw.rect(surface, PANELBG, rect, border_radius=22)
+    pygame.draw.rect(surface, PANELBD, rect, width=2, border_radius=22)
+
+    # agents
+    for a in pop.agents:
+        pygame.draw.circle(surface, pop.color, (int(a.x), int(a.y)), RADIUS)
+        pygame.draw.circle(surface, (0,0,0), (int(a.x), int(a.y)), RADIUS, width=1)
+
+    # stats text
+    n, avg_age, birth_txt = pop.stats()
+    lines = [
+        f"Total: {n}",
+        f"Average: {avg_age:.1f}",
+        f"Birth: {birth_txt}",
+        f"Death chance: {int(pop.death_rate*100)}%",
+    ]
+    text_x = rect.left
+    text_y = rect.top - 110
+    for i, line in enumerate(lines):
+        surf = font.render(line, True, TEXT)
+        surface.blit(surf, (text_x, text_y + i*26))
+
+# ------------------ App ------------------
 def main():
+    random.seed(SEED)
     pygame.init()
-    try:
-        screen = pygame.display.set_mode((GRID_W * CELL, GRID_H * CELL))
-    except Exception as e:
-        print("Pygame display init failed:", e)
-        pygame.quit()
-        sys.exit(1)
-
+    screen = pygame.display.set_mode((W, H))
     clock = pygame.time.Clock()
-    world = World()
+    font = pygame.font.SysFont("arial", 22, bold=True)
+
+    # Layout two panels
+    left_rect  = pygame.Rect(MARGIN, MARGIN+120, PANEL_W, PANEL_H)
+    right_rect = pygame.Rect(MARGIN + PANEL_W + GAP, MARGIN+120, PANEL_W, PANEL_H)
+
+    # Populations
+    left  = Population(left_rect,
+                       LEFT_CFG["color"],
+                       LEFT_CFG["birth_rate"],
+                       LEFT_CFG["death_rate"],
+                       birth_mode=LEFT_CFG["birth_mode"],
+                       env_birth_rate=LEFT_CFG["env_birth_rate"])
+    right = Population(right_rect,
+                       RIGHT_CFG["color"],
+                       RIGHT_CFG["birth_rate"],
+                       RIGHT_CFG["death_rate"],
+                       birth_mode=RIGHT_CFG["birth_mode"],
+                       env_birth_rate=RIGHT_CFG["env_birth_rate"])
+    left.reset(LEFT_CFG["start_n"])
+    right.reset(RIGHT_CFG["start_n"])
+
+    paused = False
+    t = 0.0
 
     while True:
-        action = 0  # default: no move this tick
-
-        # --- Input & events ---
+        # ---- events ----
         for e in pygame.event.get():
             if e.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit(0)
+                pygame.quit(); return
             if e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_ESCAPE:
-                    pygame.quit()
-                    sys.exit(0)
-                if e.key in (pygame.K_UP, pygame.K_w):    action = 1
-                if e.key in (pygame.K_DOWN, pygame.K_s):  action = 2
-                if e.key in (pygame.K_LEFT, pygame.K_a):  action = 3
-                if e.key in (pygame.K_RIGHT, pygame.K_d): action = 4
+                    pygame.quit(); return
+                if e.key == pygame.K_SPACE:
+                    paused = not paused
+                if e.key == pygame.K_r:
+                    left.reset(LEFT_CFG["start_n"])
+                    right.reset(RIGHT_CFG["start_n"])
+                    t = 0.0
 
-        # --- Update world ---
-        world.step(action)
+        # ---- update ----
+        if not paused:
+            left.step(DT)
+            right.step(DT)
+            t += DT
 
-        # --- Render ---
-        draw_grid(screen)
-        draw_agent(screen, world.agent)
+        # ---- render ----
+        screen.fill(BG)
+        draw_panel(screen, left_rect,  left,  LEFT_CFG["name"],   font)
+        draw_panel(screen, right_rect, right, RIGHT_CFG["name"], font)
 
-        # Title with tick/pos/FPS
-        fps = int(clock.get_fps())
-        pygame.display.set_caption(
-            f"GridWorld | t={world.t} | pos=({world.agent.x},{world.agent.y}) | fps={fps}"
-        )
+        # headers
+        hdr_left  = font.render(LEFT_CFG["name"], True, TEXT)
+        hdr_right = font.render(RIGHT_CFG["name"], True, TEXT)
+        screen.blit(hdr_left,  (left_rect.left,  left_rect.top - 140))
+        screen.blit(hdr_right, (right_rect.left, right_rect.top - 140))
+
+        # footer
+        foot = font.render(f"t = {int(t)} s",
+                           True, (220,220,220))
+        # screen.blit(foot, (MARGIN, H - 40))
+
+        # pygame.display.set_caption("Population Dynamics: Global vs Per-Agent Births")
         pygame.display.flip()
         clock.tick(FPS)
 
