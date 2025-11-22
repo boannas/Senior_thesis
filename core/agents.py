@@ -3,7 +3,20 @@ import random
 
 
 class Agent:
-    """Base agent class for Mother and Child agents"""
+    """ Base agent class for Mother and Child agents
+        === Reference attributes ===
+        # Simulation and Visualization of Distributed Artificial Life Scenarios
+        self.age = 0  # Age in time steps
+        self.max_age = 1000  # Maximum age before death
+        self.speed = 1  # Movement speed (cells per time step)
+        self.perception_range = 5  # Perception range in grid cells
+        self.information_update_rate = 1  # How often the agent updates its information
+        self.helth_level = 100  # Maximum health level
+        self.health_regeneration_rate = 1  # Health regeneration rate per time step
+        self.reproduction_rate = 0.01  # Probability of reproduction per time step
+        self.accumulated_food = 0  # Total food collected
+        self.energy_level = 100  # Maximum energy level
+    """
     def __init__(self, x, y, grid_w, grid_h, hp, energy, agent_type="mother"):
         # Initialize agent position and type
         self.x, self.y = x, y 
@@ -30,18 +43,6 @@ class Agent:
         self.cortisol = 0.0
         self.maternal_bond = 0.0
         
-        # === Reference attributes ===
-        # Simulation and Visualization of Distributed Artificial Life Scenarios
-        # self.age = 0  # Age in time steps
-        # self.max_age = 1000  # Maximum age before death
-        # self.speed = 1  # Movement speed (cells per time step)
-        # self.perception_range = 5  # Perception range in grid cells
-        # self.information_update_rate = 1  # How often the agent updates its information
-        # self.helth_level = 100  # Maximum health level
-        # self.health_regeneration_rate = 1  # Health regeneration rate per time step
-        # self.reproduction_rate = 0.01  # Probability of reproduction per time step
-        # self.accumulated_food = 0  # Total food collected
-        # self.energy_level = 100  # Maximum energy level
 
     def move(self, dx, dy):
         self.x = max(0, min(self.grid_w - 1, self.x + dx))
