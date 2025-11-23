@@ -5,6 +5,7 @@ Main entry point for running the grid world simulation with Mother, Child, Food,
 import pygame
 import sys
 from pathlib import Path
+import random
 
 # Add parent directory to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -102,7 +103,7 @@ def main(threat_positions=None):
     print("=" * 50)
     print(f"Grid size: {grid_w}x{grid_h}")
     print(f"Mother starting position: ({world.mother.x}, {world.mother.y})")
-    print(f"Child starting position: ({world.child.x}, {world.child.y})")
+    # print(f"Child starting position: ({world.child.x}, {world.child.y})")
     print(f"Number of food items: {len(world.foods)}")
     print(f"Number of threats: {len(world.threats)}")
     print(f"Nest position: {world.nest.get_position() if world.nest else 'None'}")
@@ -131,23 +132,22 @@ def main(threat_positions=None):
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
-                elif event.key in mother_action_keys:
-                    mother_action = mother_action_keys[event.key]
-                elif event.key in child_action_keys and not world.child.is_carried:
-                    child_action = child_action_keys[event.key]
+            #     elif event.key in mother_action_keys:
+            #         mother_action = mother_action_keys[event.key]
+            #     elif event.key in child_action_keys and not world.child.is_carried:
+            #         child_action = child_action_keys[event.key]
         
         # Step world only if there's an action (discrete movement)
-        if mother_action != 0 or child_action is not None:
-            world.step(mother_action, child_action)
+        # m_act = [1, 2, 3, 4, 0]
+        # mother_action = random.choice(m_act)
+        world.step(mother_action, child_action)
         
+
+
         # Render in order (background to foreground)
         draw_grid(screen, grid_w, grid_h, cell_px, bg_color, grid_color, outline_color)
-        
-        # Draw nest first (background)
         if world.nest:
-            draw_nest(screen, world.nest, cell_px, nest_color, outline_color)
-        
-        # Draw food
+            draw_nest(screen, world.nest, cell_px, nest_color, outline_color)        
         for food in world.foods:
             draw_food(screen, food, cell_px, food_color, outline_color)
         
@@ -156,10 +156,11 @@ def main(threat_positions=None):
             draw_threat(screen, threat, cell_px, threat_color, outline_color)
         
         # Draw child (before mother so mother appears on top)
-        draw_child(screen, world.child, cell_px, child_color, outline_color)
+        # draw_child(screen, world.child, cell_px, child_color, outline_color)
         
         # Draw mother (on top)
-        draw_mother(screen, world.mother, cell_px, mother_color, outline_color)
+        perception_r = 100 # Pixels
+        draw_mother(screen, world.mother, cell_px, mother_color, outline_color, perception_r=perception_r)
         
         # Update display
         pygame.display.flip()

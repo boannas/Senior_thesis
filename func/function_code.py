@@ -56,7 +56,7 @@ def draw_agent(surface, agent, cell_px, agent_color, outline):
     pygame.draw.circle(surface, agent_color, (cx, cy), r)
     pygame.draw.circle(surface, outline, (cx, cy), r, width=2)
 
-def draw_mother(surface, mother, cell_px, mother_color, outline_color):
+def draw_mother(surface, mother, cell_px, mother_color, outline_color, perception_r=150):
     """Draw mother agent"""
     cx = mother.x * cell_px + cell_px // 2
     cy = mother.y * cell_px + cell_px // 2
@@ -73,7 +73,6 @@ def draw_mother(surface, mother, cell_px, mother_color, outline_color):
         pygame.draw.circle(surface, (0, 255, 0), (cx, cy + r + 3), 4)
 
     # Draw perception range (dashed circle)
-    perception_r = 100   
     pygame.draw.circle(surface, mother_color, (cx, cy), int(perception_r), width=1)
     
 

@@ -24,29 +24,34 @@ class Agent:
         self.grid_h = grid_h 
         self.agent_type = agent_type  # "mother" or "child"
 
-        # --- General states (fixed gene)---
-        self.altruism_level = 0.0
-        self.kin_bias = 0.0
-        self.nurture_threshold = 0.0 
-        self.threat_sensitivity = 0.0
+        # # --- General states (fixed gene)---
+        # self.altruism_level = 0.0
+        # self.kin_bias = 0.0
+        # self.nurture_threshold = 0.0 
+        # self.threat_sensitivity = 0.0
 
         # --- Physiological states ---
         self.hp = hp  # Health points
         self.energy = energy  # Energy level
-        self.hunger = 0.0
-        self.fatigue = 0.0
+        # self.hunger = 0.0
+        # self.fatigue = 0.0
 
-        # --- Neuroendocrine states ---
-        self.oxytocin = 0.0
-        self.vasopressin = 0.0
-        self.dopamine = 0.0
-        self.cortisol = 0.0
-        self.maternal_bond = 0.0
+        # # --- Neuroendocrine states ---
+        # self.oxytocin = 0.0
+        # self.vasopressin = 0.0
+        # self.dopamine = 0.0
+        # self.cortisol = 0.0
+        # self.maternal_bond = 0.0
         
 
     def move(self, dx, dy):
-        self.x = max(0, min(self.grid_w - 1, self.x + dx))
-        self.y = max(0, min(self.grid_h - 1, self.y + dy))
+        if self.is_alive():
+            self.x = max(0, min(self.grid_w - 1, self.x + dx))
+            self.y = max(0, min(self.grid_h - 1, self.y + dy))
+            self.energy -= 1  # Decrease energy on movement
+            print(f"{self.agent_type.capitalize()} moved to ({self.x}, {self.y}). Energy: {self.energy}")
+        else:
+            print(f"{self.agent_type.capitalize()} is not alive and cannot move.")
     
     def get_position(self):
         """Return current position as (x, y) tuple"""
@@ -56,9 +61,13 @@ class Agent:
         """Calculate Euclidean distance to another position"""
         return ((self.x - other_x) ** 2 + (self.y - other_y) ** 2) ** 0.5
     
-    def Manhattan_distance_to(self, other_x, other_y):
-        """Calculate Manhattan distance to another position"""
-        return abs(self.x - other_x) + abs(self.y - other_y)
+    # def Manhattan_distance_to(self, other_x, other_y):
+    #     """Calculate Manhattan distance to another position"""
+    #     return abs(self.x - other_x) + abs(self.y - other_y)
+
+    def is_alive(self):
+        """Check if agent is alive based on health points"""
+        return self.energy > 0
 
     def heading_towards(self, target_x, target_y):
         """Calculate heading angle towards a target position in radians"""
@@ -68,7 +77,7 @@ class Agent:
         """Scan for entities within perception range"""
         perceived = []
         for entity in entities:
-            dist = self.Manhattan_distance_to(entity.x, entity.y)
+            dist = self.distance_to(entity.x, entity.y)
             deg = self.heading_towards(entity.x, entity.y)
             if dist <= perception_range:
                 perceived.append((entity, dist, deg))

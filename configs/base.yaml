@@ -12,8 +12,8 @@ grid:
 mother:
   start: [7, 7]   # initial position [x, y]
 
-child:
-  start: [8, 7]   # initial position [x, y]
+# child:
+#   start: [8, 7]   # initial position [x, y]
 
 # Entity positions
 food:
@@ -25,7 +25,7 @@ food:
 
 threats:
   positions:      # List of threat positions
-    - [5, 5]
+    - [4, 2]
     - [9, 9]
 
 nest:
@@ -35,7 +35,7 @@ colors:
   bg:   [255, 255, 255]       
   grid: [220, 220, 220]    
   mother: [235, 87, 87]      
-  child: [87, 87, 235]        
+  # child: [87, 87, 235]        
   food: [76, 175, 80]         
   threat: [200, 200, 200]      
   nest: [255, 193, 7]        
