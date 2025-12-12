@@ -40,7 +40,7 @@ This subsystem performs **state estimation** for a 1-degree-of-freedom robotic l
 - Outputs stable, noise-reduced estimates for RL observation:
   - Linear position (x)  
   - Linear velocity (ẋ)  
-  - Linear acceleration (ẍ)  
+  - Estimated IMU accelerometer bias   
 - Designed as the **observation pipeline** for RL training and real-world deployment
 
 The fusion system provides high-quality proprioceptive signals that help reduce the Sim2Real discrepancy.
@@ -73,9 +73,9 @@ This architecture enables systematic comparison between:
 
 ## Repository Structure
 ```
-Ros2_project/
-├── motor_controller/ # Faulhaber + MIT controller + micro-ROS firmware
-├── sensor_fusion/ # IMU + encoder Kalman filter + micro-ROS
+ROSxxxx/
+├── motor_controller.md # Faulhaber + MIT controller + micro-ROS firmware
+├── sensor_fusion.md # IMU + encoder Kalman filter + micro-ROS
 └── README.md # Overview
 ```
 

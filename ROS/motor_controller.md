@@ -187,7 +187,7 @@ motor_controller/
 After you clone workspace and build it already, then do this step for setup STM micro-controller and usages of this project.
 
 1. Upload Code from 
-`motor_controller/src/main.c` into STM32 g474 RE
+`firmware/motor_controller/Core/src/main.c` into STM32 g474 RE
 
 2. Connect MicroROS with ROS2
 
@@ -195,6 +195,7 @@ After you clone workspace and build it already, then do this step for setup STM 
 Micro-ros document : https://github.com/micro-ROS/micro_ros_setup?tab=readme-ov-file 
 
 ```bash
+sudo chmod 666 /var/run/docker.sock
 ros2 run xxxxxx
 ```
 

@@ -41,7 +41,7 @@ These fused states serve as the **observation inputs for RL locomotion policies*
 
 ## 1. Test Station Hardware
 
-![Test Station](image/1-leg.png)
+![Test Station](image/1_leg.png)
 
 The physical setup includes:
 
@@ -385,6 +385,45 @@ src/
 
 
 ## 8. Setup and Usages
+After you clone workspace and build it already, then do this step for setup STM micro-controller and usages of this project.
+
+1. Upload Code from 
+`firmware/sensor_fusion/Core/src/main.c` into STM32 g474 RE
+
+2. Connect MicroROS with ROS2
+
+**Must have micro-ros package before do this step**  
+Micro-ros document : https://github.com/micro-ROS/micro_ros_setup?tab=readme-ov-file 
+
+```bash
+sudo chmod 666 /var/run/docker.sock
+ros2 run xxxxxx
+```
+
+3. Verify MicroROS agent connect with ROS2 
+```bash
+ros2 topic echo /xxxxx
+```
+
+4. Run Collect IMU Offset and Covaiance Node
+```bash
+# Run and wait until it Collect all data
+ros2 run xxxx
+```
+
+5. Run Calibrate IMU node
+```bash
+# Run this after done collect IMU offset/Covariance or has an `imu_calib_data.yaml` already
+
+ros2 run xxxx 
+```
+
+6. Run Sensor fusion node
+```bash
+# Run this node after run `imu_calibrate.py` already
+
+ros2 run xxxx
+```
 
 ## 9. Experiment & Results
 
