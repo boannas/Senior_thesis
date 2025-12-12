@@ -227,7 +227,7 @@ ros2 topic pub /ref xxxxxxxx xxxxx xxxxx
 
 - Torque feedforward find velocity variance (Physical AI usage)
    - 0.0 - 6.0 (0.5 per step)
-   ![variance](/image/variance.png)
+   ![variance](image/variance.png)
 
    This figure justifies modeling motor velocity noise as a torque-dependent Gaussian, with SD obtained from the linear fit of measured velocity variability. The red dashed line is the key artifact: it converts experimental data into a deployable noise model for simulation RL training.
 
