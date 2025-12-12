@@ -98,6 +98,7 @@ class World:
                 
         # print(f"Mother Action: {mother_action}")
         # Move mother
+        mother_action = 0   
         dx, dy = moves.get(mother_action, (0, 0))
         self.mother.move(dx, dy)
 
