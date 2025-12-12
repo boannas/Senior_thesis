@@ -246,6 +246,16 @@ The filter outputs three fused states:
 ## State Vector
 
 The filter maintains the following state:
+<!-- $$
+\mathbf{x} =
+\begin{bmatrix}
+p_x \\
+v_x \\
+b_{ax}
+\end{bmatrix}
+$$ -->
+
+## A
 $$
 \mathbf{x} =
 \begin{bmatrix}
@@ -254,6 +264,17 @@ v_x \\
 b_{ax}
 \end{bmatrix}
 $$
+
+## B
+```math
+\mathbf{x} =
+\begin{bmatrix}
+p_x \\
+v_x \\
+b_{ax}
+\end{bmatrix}
+```
+
 
 Which represents:
 
