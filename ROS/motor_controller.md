@@ -218,7 +218,6 @@ ros2 topic pub /ref xxxxxxxx xxxxx xxxxx
 
 
 ## 8. Experiment & Results
-### input VDO this part !!!
 
 - Position control (Only Kp gain)
 
