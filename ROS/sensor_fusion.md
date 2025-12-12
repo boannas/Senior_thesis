@@ -41,7 +41,7 @@ These fused states serve as the **observation inputs for RL locomotion policies*
 
 ## 1. Test Station Hardware
 
-![Test Station](/image/1_leg.png)
+![Test Station](image/1_leg.png)
 
 The physical setup includes:
 

@@ -169,13 +169,14 @@ This control loop provides stable motor control and allows seamless switching be
 The firmware project follows the standard STM32CubeIDE layout with additional micro-ROS utilities.  
 Below is the structure and the purpose of each important directory:
 ```
-motor_controller/
-│── Core/
-│── Debug/
-│── Drivers/
-│── micro_ros_stm32cubemx_utils/
-│── Middlewares/
-│── src/main.c        ← MIT controller + Kalman + ROS executor
+firmware
+│── motor_controller/
+   │── Core/
+   │── Debug/
+   │── Drivers/
+   │── micro_ros_stm32cubemx_utils/
+   │── Middlewares/
+   │── src/main.c        ← MIT controller + Kalman + ROS executor
 .
 .
 .
@@ -222,8 +223,13 @@ ros2 topic pub /ref xxxxxxxx xxxxx xxxxx
 - Position control (Only Kp gain)
 
    - 0-25 radian    
+   [![Video](https://img.youtube.com/vi/MwjW3fFo0FY/0.jpg)](https://youtu.be/MwjW3fFo0FY)
+
    - 25-0 radian
+     [![Video](https://img.youtube.com/vi/hOxzZjQeZOY/0.jpg)](https://youtu.be/hOxzZjQeZOY)
+
    - 0-10 radian with error
+   [![Video](https://img.youtube.com/vi/1StSETxJiX8/0.jpg)](https://youtu.be/1StSETxJiX8)
 
 - Torque feedforward find velocity variance (Physical AI usage)
    - 0.0 - 6.0 (0.5 per step)
