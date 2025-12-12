@@ -19,7 +19,21 @@ This module can operate using the classical MIT controller or be replaced by an 
 
 ---
 
-## Hardware Setup
+
+## Table of Contents
+
+1. [Hardware Setup](#1-hardware-setup)
+2. [System Architecture](#2-system-architecture)
+3. [Processing Pipeline](#3-processing-pipeline)
+4. [ROS Node](#4-ros-node)
+5. [ROS Topics](#5-ros-topics)
+6. [Project Structure](#6-project-structure)
+7. [Setup & Usages](#7-setup-and-usages)
+8. [Experiments & Results](#8-experiment--results)
+9. [Notes](#9-notes)
+
+---
+## 1. Hardware Setup
 
 ![faulhabor](image/faulhabor.png)
 
@@ -45,7 +59,7 @@ This hardware layout enables real-time closed-loop control with micro-ROS commun
 
 ---
 
-## System Architecture
+## 2. System Architecture
 
 ![motor](image/motor_node.png)
 
@@ -92,7 +106,7 @@ This control loop provides stable motor control and allows seamless switching be
 
 ---
 
-## Processing Pipeline
+## 3. Processing Pipeline
 
 1. **Encoder Read (TIM3)**
    - Read raw encoder ticks  
@@ -124,7 +138,7 @@ This control loop provides stable motor control and allows seamless switching be
    - `/rl_action_subscription`: RL voltage command  
 
 ---
-## ROS Node
+## 4. ROS Node
 
 | Node Name       | Description |
 |----------------|-------------|
@@ -132,7 +146,7 @@ This control loop provides stable motor control and allows seamless switching be
 
 ---
 
-## ROS Topics
+## 5. ROS Topics
 
 ### Publishers
 
@@ -150,7 +164,7 @@ This control loop provides stable motor control and allows seamless switching be
 
 ---
 
-## Project Structure
+## 6. Project Structure
 
 The firmware project follows the standard STM32CubeIDE layout with additional micro-ROS utilities.  
 Below is the structure and the purpose of each important directory:
@@ -169,7 +183,7 @@ motor_controller/
 
 ---
 
-## Setup and Usages
+## 7. Setup and Usages
 After you clone workspace and build it already, then do this step for setup STM micro-controller and usages of this project.
 
 1. Upload Code from 
@@ -201,7 +215,7 @@ ros2 topic pub /ref xxxxxxxx xxxxx xxxxx
 ```
 
 
-## Experiment & Results
+## 8. Experiment & Results
 ### input VDO this part !!!
 
 - Position control (Only Kp gain)
@@ -217,7 +231,7 @@ ros2 topic pub /ref xxxxxxxx xxxxx xxxxx
    This figure justifies modeling motor velocity noise as a torque-dependent Gaussian, with SD obtained from the linear fit of measured velocity variability. The red dashed line is the key artifact: it converts experimental data into a deployable noise model for simulation RL training.
 
 
-## Notes
+## 9. Notes
 
 - micro-ROS agent must be running before this firmware communicates.
 

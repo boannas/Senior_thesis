@@ -26,7 +26,20 @@ These fused states serve as the **observation inputs for RL locomotion policies*
 
 ---
 
-## Test Station Hardware
+## Table of Contents
+
+1. [Hardware Setup](#hardware-setup)
+2. [System Architecture](#2-system-architecture)
+3. [STM32 Firmware](#3-stm32-firmware-micro-ros-publisher)
+4. [IMU calibration Framework](#4-imu-calibration-framework)
+5. [Sensor Fusion Node](#5-sensor-fusion-node)
+6. [Kalman Filter](#6-1-d-kalman-filter-explanation)
+7. [Project Structure](#7-project-structure)
+8. [Setup & Usages](#8-setup-and-usages)
+8. [Experiments & Results](#9-experiment--results)
+9. [Notes](#10-notes)
+
+## 1. Test Station Hardware
 
 ![Test Station](image/1-leg.png)
 
@@ -49,7 +62,7 @@ The physical setup includes:
 
 ---
 
-## System Architecture
+## 2. System Architecture
 
 ![architecture](image/sensor_fuse.png)
 
@@ -57,17 +70,6 @@ The physical setup includes:
 
 1. **STM32 micro-ROS Node**  
    Publishes raw IMU + encoder via `/sensor_parameter_publisher`.
-
-<!-- 2. **IMU Offset Node**  
-   Computes real-time offsets for debugging.
-
-3. **IMU Calibration Node**  
-   - Collects a stationary dataset  
-   - Computes offsets + covariance  
-   - Saves results to `imu_calib_data.yaml`
-
-4. **Sensor Fusion Node (Kalman Filter)**  
-   Outputs fused `[position, velocity, acceleration]` via `/sensor_fusion_publisher`. --> 
 
 2. **IMU Calibration Collector Node**  
 - Collects ~10,000 stationary samples  
@@ -98,7 +100,7 @@ The physical setup includes:
 
 ---
 
-## STM32 Firmware (micro-ROS Publisher)
+## 3. STM32 Firmware (micro-ROS Publisher)
 
 ### Purpose
 Collects IMU + encoder data at 100 Hz and publishes them to ROS 2.
@@ -125,44 +127,7 @@ This is the **entry point** of the sensing pipeline.
 
 ---
 
-<!-- ## IMU Offset Node
-
-A debugging helper node that:
-
-- Subscribes to `/sensor_parameter_publisher`
-- Computes basic mean offsets online
-- Publishes corrected IMU data
-
-Used for visualizing drift before performing full calibration.
-
----
-
-## IMU Calibration Node  
-### Accurate estimation of offsets and covariance
-
-This node:
-
-1. Collects ~10,000 stationary IMU samples  
-2. Computes:  
-   - Accelerometer offset  
-   - Gyroscope offset  
-   - Accelerometer covariance  
-   - Gyroscope covariance  
-3. Writes results to:
-
-```
-imu_calib_data.yaml
-```
-
-### Published Topic
-
-| Topic | Type | Description |
-|-------|------|-------------|
-| `/calibrated_parameter` | `sensor_interface/msg/SensorParameter` | IMU with offsets removed |
-
---- -->
-
-## IMU Calibration Framework
+## 4. IMU Calibration Framework
 
 ### 1. Calibration Collector Node  
 *(File: `imu_offset_node.py`)*
@@ -173,8 +138,8 @@ It:
 1. Subscribes to raw IMU data
 2. Collects a fixed number of samples
 3. Computes:
-- Mean offsets
-- Covariance matrices
+   - Mean offsets
+   - Covariance matrices
 4. Writes results to `imu_calib_data.yaml`
 
 Stored parameters:
@@ -202,7 +167,7 @@ Published topic:
 
 
 
-## Sensor Fusion Node  
+## 5. Sensor Fusion Node  
 ### (1-D Kalman Filter for Translational X Motion)
 
 ### Subscribed Topic
@@ -228,7 +193,7 @@ Published topic:
 
 
 
-## 1-D Kalman Filter Explanation
+## 6. 1-D Kalman Filter Explanation
 
 The sensor fusion system uses a **1-dimensional Kalman filter** to estimate linear motion along the X-axis by combining:
 
@@ -243,29 +208,10 @@ The filter outputs three fused states:
 
 ---
 
-## State Vector
+### State Vector
 
 The filter maintains the following state:
-<!-- $$
-\mathbf{x} =
-\begin{bmatrix}
-p_x \\
-v_x \\
-b_{ax}
-\end{bmatrix}
-$$ -->
 
-## A
-$$
-\mathbf{x} =
-\begin{bmatrix}
-p_x \\
-v_x \\
-b_{ax}
-\end{bmatrix}
-$$
-
-## B
 ```math
 \mathbf{x} =
 \begin{bmatrix}
@@ -284,13 +230,7 @@ Which represents:
 
 ---
 
-## Prediction Model
-
-<!-- The filter predicts the next state using the IMU acceleration:
-
-$$
-\mathbf{x}_{k+1} = A \mathbf{x}_k + B a_x
-$$ -->
+### Prediction Model
 
 
 The filter predicts the next state using the measured IMU acceleration:
@@ -338,7 +278,7 @@ self.x = self.A @ self.x + self.B @ a_imu
 
 ---
 
-## Process Noise (Q Matrix)
+### Process Noise (Q Matrix)
 
 The Q matrix accounts for:
 
@@ -360,7 +300,7 @@ The values depend on the IMU covariance stored in:
 
 ---
 
-## Measurement Model (Encoder)
+### Measurement Model (Encoder)
 
 The encoder measures **only position**:
 
@@ -398,24 +338,24 @@ $$
 
 ---
 
-## Additional Fusion Logic
+### Additional Fusion Logic
 
-### **1. Encoder Wrap-Around Handling**
+#### **1. Encoder Wrap-Around Handling**
 Handles 32-bit hardware counter rollover from TIM5.
 
-### **2. Static Velocity Lock**
+#### **2. Static Velocity Lock**
 If encoder velocity remains below threshold:  
 → Force `v_x = 0`  
 Improves stability on small vibrations.
 
-### **3. Accelerometer Deadband**
+#### **3. Accelerometer Deadband**
 If IMU acceleration is extremely small:  
 → Replace measurement with bias estimate  
 Prevents jitter from low-noise IMU drift.
 
 ---
 
-## Project Structure
+## 7. Project Structure
 
 ```
 firmware/
@@ -424,34 +364,32 @@ firmware/
 
 src/
 │── imu_calibration
-    │── config/
+    │── config/                  ← collect .yaml from 'imu_offset_node.py'
     ...
     │── script/
-        │── imu_calibrate.py     ← calibration nodes + config
-        │── imu_offset_node.py   ← 
-        │── sensor_fusion.py
+        │── imu_calibrate.py     ← publish calibrated IMU data
+        │── imu_offset_node.py   ← collect data and compute offset, covaiance
+        │── sensor_fusion.py     ← publish fused data
 
 │── imu_caliration_interfaces
     │── ...
-    │── srv/
-        │── IMUParamteres.srv
+    │── srv/                  
+        │── IMUParamteres.srv    ← custom service
 
 │── sensor_interace
     │── ...
     │── msg/
-        │── SensorOutput.msg
-        │── SensorParameter.msg
+        │── SensorOutput.msg     ← custom msg
+        │── SensorParameter.msg  ← custom msg
 ```
 
 
----
+## 8. Setup and Usages
+
+## 9. Experiment & Results
 
 
-
-## Experiment & Results
-
-
-## Notes
+## 10. Notes
 
 - Encoder measures **only linear displacement**, not joint angles.  
 - Calibration must be performed with the robot **fully stationary**.  
