@@ -48,7 +48,7 @@ class Agent:
         if self.is_alive():
             self.x = max(0, min(self.grid_w - 1, self.x + dx))
             self.y = max(0, min(self.grid_h - 1, self.y + dy))
-            self.energy -= 1  # Decrease energy on movement
+            # self.energy -= 1  # Decrease energy on movement
             print(f"{self.agent_type.capitalize()} moved to ({self.x}, {self.y}). Energy: {self.energy}")
         else:
             print(f"{self.agent_type.capitalize()} is not alive and cannot move.")
