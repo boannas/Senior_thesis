@@ -47,10 +47,10 @@ def pair_bonding_hormones(t, OT, AVP, dr = 0.01):
 
 
 # Generate hormonal signals
-n_days = 10
-t, DA  = hormonal_generator_signal(24 * n_days, dt=1.0 / 60, amplitude=0.3, phase_shift=20)
-_, OT  = hormonal_generator_signal(24 * n_days, dt=1.0 / 60, amplitude=0.3, phase_shift=10)
-_, AVP = hormonal_generator_signal(24 * n_days, dt=1.0 / 60, amplitude=0.3, phase_shift=10)
+n_days = 1
+t, DA  = hormonal_generator_signal(24 * n_days, dt=1.0e-1, amplitude=0.3, phase_shift=20)
+_, OT  = hormonal_generator_signal(24 * n_days, dt=1.0e-1 , amplitude=0.3, phase_shift=10)
+_, AVP = hormonal_generator_signal(24 * n_days, dt=1.0e-1, amplitude=0.3, phase_shift=10)
 
 # Compute pair bonding hormone dynamics
 PB = pair_bonding_hormones(t, OT, AVP)
