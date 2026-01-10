@@ -45,18 +45,22 @@ DA_levels = hormone_levels_at_time(t_seconds)['DA']
 AVP_levels = hormone_levels_at_time(t_seconds)['AVP']
 # OT_levels = OT.circadian(t_hours)
 
-window = int(3600*4 // DT_paper)  # 1 hour window
-print(window)
-plt.figure(figsize=(12, 4))
-plt.plot(t_hours[:window], DA_levels[:window], label='Dopamine (DA)', color='orange')
-plt.plot(t_hours[:window], AVP_levels[:window], label='Vasopressin (AVP)', color='green')
-plt.plot(t_hours[:window], OT_levels[:window], label='Oxytocin (OT)', color='blue')
-plt.xlabel("Time (hours)")  
-plt.ylabel("Hormone level")
-plt.title(f"Oxytocin (OT) levels over 1 hour (dt={DT_paper}s)")
-plt.grid(True)
-plt.legend()
-plt.tight_layout()
-plt.show()
+print(f"OT levels (first 10 values): {OT_levels[:10]}")
+print(f"DA levels (first 10 values): {DA_levels[:10]}")
+print(f"AVP levels (first 10 values): {AVP_levels[:10]}")
+
+# window = int(3600*24 // DT_paper)  # 1 hour window = 3600 
+# print(window)
+# plt.figure(figsize=(12, 4))
+# plt.plot(t_hours[:window], DA_levels[:window], label='Dopamine (DA)', color='orange')
+# plt.plot(t_hours[:window], AVP_levels[:window], label='Vasopressin (AVP)', color='green')
+# plt.plot(t_hours[:window], OT_levels[:window], label='Oxytocin (OT)', color='blue')
+# plt.xlabel("Time (hours)")  
+# plt.ylabel("Hormone level")
+# plt.title(f"Oxytocin (OT) levels over 1 hour (dt={DT_paper}s)")
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
 
     
