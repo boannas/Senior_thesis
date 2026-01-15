@@ -6,7 +6,8 @@ class StimulusTable:
                 {"target": "AVP", "alpha": 0.0075, "beta": 1.0}
             ],
             "CARESS": [
-                {"target": "OT", "alpha": 0.0075, "beta": "0.02 * PB"}
+                {"target": "OT", "alpha": 0.0075, "beta": "0.02 * PB"},
+                {"target": "SN", "alpha": -0.002, "beta": 1.0}  # Physiological inhibition
             ],
             "CORRECT": [
                 {"target": "OT", "alpha": 0.001, "beta": "0.02 * PB"},

@@ -5,6 +5,7 @@ from matplotlib.animation import FuncAnimation
 from collections import deque
 import numpy as np
 from hormone import HormoneSystem
+from hormone import BiologicalProcessSystem
 
 # KEYBOARD INPUT
 class KeyboardInput:
@@ -65,7 +66,7 @@ class Fig4RealtimePlotter:
         self.window_s = float(window_s)
 
         self.fig, (self.ax_pb, self.ax_h, self.ax_si) = plt.subplots(
-            3, 1, figsize=(16, 8.5), sharex=True
+            3, 1, figsize=(12, 6), sharex=True
         )
 
         # (a) PB
@@ -137,10 +138,38 @@ class Fig4RealtimePlotter:
         self.spike_artists.append(art)
 
     def update_plot(self, _):
-        if len(self.hs.time_history) < 2:
+        # determine length to use (all histories should have same length)
+        n = min(
+            len(self.hs.time_history),
+            len(self.hs.PB_history),
+            len(self.hs.OT_history),
+            len(self.hs.AVP_history),
+            len(self.hs.DA_history),
+            len(self.hs.si_user_history),
+            len(self.hs.si_hit_history),
+            len(self.hs.si_care_history),
+            len(self.hs.si_correct_history),
+            len(self.hs.si_wrong_history),
+        )
+
+        if n < 2:
             return self.init_plot()
 
-        t = np.array(self.hs.time_history)
+        # Convert deques to numpy arrays with exactly the same length
+        t  = np.array(list(self.hs.time_history)[-n:])
+
+        # print('PB: ', self.hs.PB_history[-1])
+
+        PB = np.array(list(self.hs.PB_history)[-n:])
+        OT = np.array(list(self.hs.OT_history)[-n:])
+        AVP= np.array(list(self.hs.AVP_history)[-n:])
+        DA = np.array(list(self.hs.DA_history)[-n:])
+
+        si_user = np.array(list(self.hs.si_user_history)[-n:])
+        si_hit  = np.array(list(self.hs.si_hit_history)[-n:])
+        si_care = np.array(list(self.hs.si_care_history)[-n:])
+        si_corr = np.array(list(self.hs.si_correct_history)[-n:])
+        si_wrong= np.array(list(self.hs.si_wrong_history)[-n:])
 
         # window
         t_end = t[-1]
@@ -149,16 +178,16 @@ class Fig4RealtimePlotter:
 
         tw = t[mask]
 
-        PB = np.array(self.hs.PB_history)[mask]
-        OT = np.array(self.hs.OT_history)[mask]
-        AVP = np.array(self.hs.AVP_history)[mask]
-        DA = np.array(self.hs.DA_history)[mask]
+        PB = PB[mask]
+        OT = OT[mask]
+        AVP = AVP[mask]
+        DA = DA[mask]
 
-        si_user = np.array(self.hs.si_user_history)[mask]
-        si_hit = np.array(self.hs.si_hit_history)[mask]
-        si_care = np.array(self.hs.si_care_history)[mask]
-        si_corr = np.array(self.hs.si_correct_history)[mask]
-        si_wrong = np.array(self.hs.si_wrong_history)[mask]
+        si_user = si_user[mask]
+        si_hit  = si_hit[mask]
+        si_care = si_care[mask]
+        si_corr = si_corr[mask]
+        si_wrong= si_wrong[mask]
 
         # top panels
         self.line_PB.set_data(tw, PB)
@@ -194,7 +223,7 @@ class Fig4RealtimePlotter:
         plt.show()
 
 # SIM LOOP
-def simulation_loop(hs: HormoneSystem, kb: KeyboardInput, dt_s=0.5):
+def simulation_loop(hs: HormoneSystem, kb: KeyboardInput, dt_s=0.5, bp: BiologicalProcessSystem = None):
     while kb.running:
         # duration signals
         hs.set_duration("USER_PRESENCE", 100.0 if kb.user_present else 0.0)
@@ -212,7 +241,7 @@ def simulation_loop(hs: HormoneSystem, kb: KeyboardInput, dt_s=0.5):
 
         # update
         hs.update(dt_s=dt_s)
-        hs.update_PB(dt_s=dt_s)
+        # hs.update_PB(dt_s=dt_s)
 
         # record BEFORE resetting impulses
         hs.record()

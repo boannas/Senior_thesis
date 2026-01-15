@@ -3,9 +3,75 @@ from collections import deque
 import numpy as np
 from stim import StimulusTable
 
+# Motivation States
+class MotivationState:
+    def __init__(self):
+        self.awake = 0
+        self.play = 0
+        self.social = 0
+        self.relax = 0
+    
+    def update(self, WK, SN, ENT, PB, UR):
+        pass
+
+# Biological Process System
+class BiologicalProcessSystem:
+    def __init__(self, WK=5.0, SN=0.0, ENT=0.0, PB=50.0, UR=50.0):
+        # Initial values
+        self.state = {
+            "WK": float(WK),     # Wakefulness  
+            "SN": float(SN),     # Social Need
+            "ENT": float(ENT),   # Entertainment
+            "PB": float(PB),     # Pair Bonding
+            "UR": float(UR),     # User Rejection
+        }
+
+    
+        # Ideal values
+        self.ideal = {
+            "WK": 5.0,
+            "SN": 0.0,
+            "ENT": 0.0,
+            "PB": 100.0,
+            "UR": 0.0,
+        }
+
+    def deficits(self):
+        return {
+            k: self.ideal[k] - self.state[k] 
+            for k in self.state
+        }
+    
+    def update(self, DA, OT, AVP, dt_s=0.5):
+        # Wakefulness (WK) 
+        self.WK = 5.0
+
+        # Social Need (SN)
+        self.state["SN"] = self.state["SN"] + 0.02 * OT
+        self.state["SN"] = float(np.clip(self.state["SN"], 0, 100))
+        
+        # Entertainment (ENT)
+        self.state["ENT"] = self.state["ENT"] + 0.02 * DA
+        self.state["ENT"] = float(np.clip(self.state["ENT"], 0, 100))
+
+        # Pair Bonding (PB) 
+        dr = 0.01
+        self.state["PB"] = self.state["PB"] + (0.2 * OT - 0.2 * AVP - dr) 
+        self.state["PB"] = float(np.clip(self.state["PB"], 0, 100))
+
+        # User Rejection (UR)
+        self.state["UR"] = 100 - self.state["PB"]
+        self.state["UR"] = float(np.clip(self.state["UR"], 0, 100))
+
+        deficit = self.deficits()
+        print(f"Biological WK: {self.state['WK']:.2f}, SN: {self.state['SN']:.2f}, ENT: {self.state['ENT']:.2f}, PB: {self.state['PB']:.2f}, UR: {self.state['UR']:.2f}")
+        print(f"Deficits: {deficit}")
+        # print(f"  Deficits -- SN: {deficit_SN:.2f}, ENT: {deficit_ENT:.2f}, PB: {deficit_PB:.2f}, UR: {deficit_UR:.2f}")
+        
 # HORMONE SYSTEM
 class HormoneSystem:
-    def __init__(self, PB=50, history_size=1200):
+    def __init__(self, PB=50, history_size=1200, bp: BiologicalProcessSystem = None):
+        self.bp = bp
         self.PB = float(PB)
 
         # time
@@ -75,10 +141,13 @@ class HormoneSystem:
 
         # stimulus contributions (Eq. 3)
         dDA = dOT = dAVP = 0.0
+        # dSN = 0.0  # Social Need
         for stim_name, si_val in self.si.items():
             if si_val <= 0:
                 continue
             for eff in self.table.get_effects(stim_name):
+                # print(f"Stim: {stim_name}, Effect: {eff}")
+
                 alpha = eff["alpha"]
                 beta = self.eval_beta(eff["beta"])
                 se = alpha * beta * si_val  # Eq. (3)
@@ -88,16 +157,23 @@ class HormoneSystem:
                     dOT += se
                 elif eff["target"] == "AVP":
                     dAVP += se
+                # elif eff["target"] == "SN":
+                #     dSN += se  # SN inhibits DA
+                print(f"  {stim_name} -> {eff['target']}: {se:.4f}")
 
         # update hormones
         self.DA  = float(np.clip(cr_DA  + dDA,                 0.01, 1.0))
         self.AVP = float(np.clip(cr_AVP + dAVP,                0.01, 1.0))
         self.OT  = float(np.clip(cr_OT  + dOT + self.OT_auto,  0.01, 1.0))
-
+        
+        # update biological processes
+        self.bp.update(self.DA, self.OT, self.AVP, dt_s=dt_s) 
+    
         # advance time
         self.time_h = (self.time_h + dt_s / 3600.0) % 24.0
         self.elapsed_s += dt_s
 
+    # Move to Physio class
     def update_PB(self, dt_s=0.5):
         # scale PB dynamics to paper’s typical dt=0.5s
         step_scale = dt_s / 0.5

@@ -1,4 +1,4 @@
-from hormone import HormoneSystem
+from hormone import BiologicalProcessSystem, HormoneSystem
 from utilss import KeyboardInput, Fig4RealtimePlotter, simulation_loop
 import threading
 
@@ -11,10 +11,12 @@ def main():
     print("  [Q] quit")
     print("=" * 70)
 
-    hs = HormoneSystem(PB=50, history_size=2400)
-    kb = KeyboardInput()
+    bp = BiologicalProcessSystem()  # biological process system
+    hs = HormoneSystem(PB=50, history_size=2400, bp=bp)        # initial hormone system
+    kb = KeyboardInput()    # keyboard input handler
     kb.start()
 
+    # start simulation loop in a separate thread
     th = threading.Thread(target=simulation_loop, args=(hs, kb, 0.5), daemon=True)
     th.start()
 
