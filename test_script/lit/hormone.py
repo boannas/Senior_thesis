@@ -5,18 +5,32 @@ from stim import StimulusTable
 
 # Motivation States
 class MotivationState:
-    def __init__(self):
+    def __init__(self, physio=None, deficit=None):
         self.awake = 0
         self.play = 0
         self.social = 0
         self.relax = 0
+        
+        self.user_presence = 1
     
-    def update(self, WK, SN, ENT, PB, UR):
-        pass
+    def update(self, physio, deficit):
+        # print('physio', physio)
+        # print('deficit', deficit)
+        # self.awake = float((physio["WK"]))
+        # self.play = float((deficit["ENT"] * physio["WK"] * (100 - self.user_presence)))
+        # self.social = float((deficit["SN"] * physio["WK"] * self.user_presence))
+        # self.relax = float((physio["UR"] * self.user_presence))
+
+        self.awake = float((physio["WK"]))
+        self.play = float((deficit["ENT"] * physio["WK"] ))
+        self.social = float((deficit["SN"] * physio["WK"]))
+        self.relax = float((physio["UR"]))
+
+        print(f"Motivation States - Awake: {self.awake:.2f}, Play: {self.play:.2f}, Social: {self.social:.2f}, Relax: {self.relax:.2f}")
 
 # Biological Process System
 class BiologicalProcessSystem:
-    def __init__(self, WK=5.0, SN=0.0, ENT=0.0, PB=50.0, UR=50.0):
+    def __init__(self, WK=5.0, SN=0.0, ENT=0.0, PB=100.0, UR=50.0):
         # Initial values
         self.state = {
             "WK": float(WK),     # Wakefulness  
@@ -26,7 +40,6 @@ class BiologicalProcessSystem:
             "UR": float(UR),     # User Rejection
         }
 
-    
         # Ideal values
         self.ideal = {
             "WK": 5.0,
@@ -35,10 +48,13 @@ class BiologicalProcessSystem:
             "PB": 100.0,
             "UR": 0.0,
         }
+        
+        self.deficit = self.deficits()
+        # self.deficits = self.deficits()
 
     def deficits(self):
         return {
-            k: self.ideal[k] - self.state[k] 
+            k: float(self.state[k] - self.ideal[k]) 
             for k in self.state
         }
     
@@ -63,15 +79,17 @@ class BiologicalProcessSystem:
         self.state["UR"] = 100 - self.state["PB"]
         self.state["UR"] = float(np.clip(self.state["UR"], 0, 100))
 
-        deficit = self.deficits()
-        print(f"Biological WK: {self.state['WK']:.2f}, SN: {self.state['SN']:.2f}, ENT: {self.state['ENT']:.2f}, PB: {self.state['PB']:.2f}, UR: {self.state['UR']:.2f}")
-        print(f"Deficits: {deficit}")
-        # print(f"  Deficits -- SN: {deficit_SN:.2f}, ENT: {deficit_ENT:.2f}, PB: {deficit_PB:.2f}, UR: {deficit_UR:.2f}")
-        
+        # update deficits
+        self.deficit = self.deficits()
+
+        print(f"Biological States - WK: {self.state['WK']:.2f}, SN: {self.state['SN']:.2f}, ENT: {self.state['ENT']:.2f}, PB: {self.state['PB']:.2f}, UR: {self.state['UR']:.2f}")
+        print(f"Deficits - SN: {self.deficit['SN']:.2f}, ENT: {self.deficit['ENT']:.2f}, PB: {self.deficit['PB']:.2f}, UR: {self.deficit['UR']:.2f}")
+
 # HORMONE SYSTEM
 class HormoneSystem:
-    def __init__(self, PB=50, history_size=1200, bp: BiologicalProcessSystem = None):
+    def __init__(self, PB=50, history_size=1200, bp: BiologicalProcessSystem = None, MS: MotivationState = None):
         self.bp = bp
+        self.motivation = MS
         self.PB = float(PB)
 
         # time
@@ -157,9 +175,7 @@ class HormoneSystem:
                     dOT += se
                 elif eff["target"] == "AVP":
                     dAVP += se
-                # elif eff["target"] == "SN":
-                #     dSN += se  # SN inhibits DA
-                print(f"  {stim_name} -> {eff['target']}: {se:.4f}")
+                # print(f"  {stim_name} -> {eff['target']}: {se:.4f}")
 
         # update hormones
         self.DA  = float(np.clip(cr_DA  + dDA,                 0.01, 1.0))
@@ -168,18 +184,15 @@ class HormoneSystem:
         
         # update biological processes
         self.bp.update(self.DA, self.OT, self.AVP, dt_s=dt_s) 
-    
+        self.motivation.update(self.bp.state, self.bp.deficit)
+        # print(physio)
+        # print(deficit)
+        # print(self.bp.state['PB'])
+
         # advance time
         self.time_h = (self.time_h + dt_s / 3600.0) % 24.0
         self.elapsed_s += dt_s
 
-    # Move to Physio class
-    def update_PB(self, dt_s=0.5):
-        # scale PB dynamics to paper’s typical dt=0.5s
-        step_scale = dt_s / 0.5
-        dr = 0.01
-        delta = (0.2 * self.OT - 0.2 * self.AVP - dr) * step_scale
-        self.PB = float(np.clip(self.PB + delta, 0, 100))
 
     def record(self):
         self.time_history.append(self.elapsed_s)

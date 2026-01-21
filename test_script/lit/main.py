@@ -1,4 +1,4 @@
-from hormone import BiologicalProcessSystem, HormoneSystem
+from hormone import BiologicalProcessSystem, HormoneSystem, MotivationState
 from utilss import KeyboardInput, Fig4RealtimePlotter, simulation_loop
 import threading
 
@@ -12,7 +12,9 @@ def main():
     print("=" * 70)
 
     bp = BiologicalProcessSystem()  # biological process system
-    hs = HormoneSystem(PB=50, history_size=2400, bp=bp)        # initial hormone system
+    ms = MotivationState(physio=bp.state, deficit=bp.deficits)
+     # motivation state
+    hs = HormoneSystem(PB=80, history_size=2400, bp=bp, MS=ms)        # initial hormone system
     kb = KeyboardInput()    # keyboard input handler
     kb.start()
 
