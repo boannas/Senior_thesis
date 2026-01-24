@@ -48,34 +48,29 @@ def draw_grid(surface, grid_w, grid_h, cell_px, bg, grid_color, outline):
     for y in range(1, grid_h):
         pygame.draw.line(surface, grid_color, (0, y * cell_px), (grid_w * cell_px, y * cell_px))
 
-def draw_agent(surface, agent, cell_px, agent_color, outline):
-    """Draw a generic agent (legacy function for backward compatibility)"""
-    cx = agent.x * cell_px + cell_px // 2
-    cy = agent.y * cell_px + cell_px // 2
-    r = cell_px // 3
-    pygame.draw.circle(surface, agent_color, (cx, cy), r)
-    pygame.draw.circle(surface, outline, (cx, cy), r, width=2)
-
 def draw_mother(surface, mother, cell_px, mother_color, outline_color, perception_r=150):
     """Draw mother agent"""
     cx = mother.x * cell_px + cell_px // 2
     cy = mother.y * cell_px + cell_px // 2
-    r = cell_px // 3
+    r = cell_px // 2.5
     # Draw mother as a circle
     pygame.draw.circle(surface, mother_color, (cx, cy), r)
     pygame.draw.circle(surface, outline_color, (cx, cy), r, width=2)
-    # Draw indicator if carrying child or food
-    if mother.has_child:
-        # Small circle on top for child indicator
-        pygame.draw.circle(surface, (255, 255, 0), (cx, cy - r - 3), 4)
-    if mother.has_food:
-        # Small circle on bottom for food indicator
-        pygame.draw.circle(surface, (0, 255, 0), (cx, cy + r + 3), 4)
 
-    # Draw perception range (dashed circle)
-    pygame.draw.circle(surface, mother_color, (cx, cy), int(perception_r), width=1)
-    
+    # Label Mother
+    font_size = int(r * 1.5)
+    font = pygame.font.SysFont(None, font_size)
+    text_surface = font.render("M", True, [255,255,255])
+    text_rect = text_surface.get_rect(center=(cx, cy))
+    surface.blit(text_surface, text_rect)
 
+
+
+
+
+
+
+# =======================================================================================================
 def draw_child(surface, child, cell_px, child_color, outline_color):
     """Draw child agent"""
     if child.is_carried:

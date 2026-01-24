@@ -26,7 +26,7 @@ def main(threat_positions=None):
                          If None, threats will be loaded from config file.
     """
     # Load configuration
-    config_path = Path(__file__).parent.parent / "configs" / "base.yaml"
+    config_path = Path(__file__).parent.parent / "base.yaml"
     cfg = load_config(str(config_path))
     
     # Extract configuration
@@ -35,27 +35,20 @@ def main(threat_positions=None):
     cell_px = cfg["grid"]["cell_px"]
     fps = cfg["fps"]
     seed = cfg["seed"]
+    dt = cfg["simulation"]["dt"]
+
     
     # Agent positions
     mother_start = cfg["mother"]["start"]
-    child_start = cfg["child"]["start"]
-    
-    
+        
     # Entity positions
     food_positions = cfg["food"].get("positions", [])
-    # Use provided threat_positions or load from config
-    if threat_positions is None:
-        threat_positions = cfg["threats"].get("positions", [])
-    nest_position = cfg["nest"].get("position", None)
     
     # Colors
     bg_color = tuple(cfg["colors"]["bg"])
     grid_color = tuple(cfg["colors"]["grid"])
     mother_color = tuple(cfg["colors"]["mother"])
-    child_color = tuple(cfg["colors"]["child"])
     food_color = tuple(cfg["colors"]["food"])
-    threat_color = tuple(cfg["colors"]["threat"])
-    nest_color = tuple(cfg["colors"]["nest"])
     outline_color = tuple(cfg["colors"]["outline"])
     
     # Initialize pygame
@@ -72,56 +65,19 @@ def main(threat_positions=None):
     world = World(
         grid_w, grid_h,
         mother_start=mother_start,
-        child_start=child_start,
         food_positions=food_positions,
         threat_positions=threat_positions,
-        nest_position=nest_position,
         seed=seed
     )
     
-    # Action mapping: 0=stay, 1=up, 2=down, 3=left, 4=right
-    mother_action_keys = {
-        pygame.K_UP: 1,
-        pygame.K_DOWN: 2,
-        pygame.K_LEFT: 3,
-        pygame.K_RIGHT: 4,
-        pygame.K_w: 1,  # W for up
-        pygame.K_s: 2,  # S for down
-        pygame.K_a: 3,  # A for left
-        pygame.K_d: 4,  # D for right
-    }
-    
-    # Child action keys (IJKL or numpad)
-    child_action_keys = {
-        pygame.K_i: 1,  # I for up
-        pygame.K_k: 2,  # K for down
-        pygame.K_j: 3,  # J for left
-        pygame.K_l: 4,  # L for right
-    }
-    
-    print("Grid World with Multiple Entities")
-    print("=" * 50)
-    print(f"Grid size: {grid_w}x{grid_h}")
-    print(f"Mother starting position: ({world.mother.x}, {world.mother.y})")
-    # print(f"Child starting position: ({world.child.x}, {world.child.y})")
-    print(f"Number of food items: {len(world.foods)}")
-    print(f"Number of threats: {len(world.threats)}")
-    print(f"Nest position: {world.nest.get_position() if world.nest else 'None'}")
-    print("\nControls:")
-    print("  Mother: Arrow keys or WASD")
-    print("  Child: IJKL keys (when not carried)")
-    print("  ESC or Close window: Exit")
-    print("\nGameplay:")
-    print("  - Mother can pick up child when on same cell")
-    print("  - Mother can collect food when on same cell")
-    print("  - Mother can drop child/food at nest")
-    print("  - Avoid threats!")
-    print("=" * 50)
-    
     # Main game loop
     running = True
-    
+    accumulator = 0.0
+
     while running:
+        frame_time = clock.tick(fps) / 1000.0  # seconds
+        accumulator += frame_time
+
         mother_action = 0
         child_action = None
         
@@ -132,31 +88,16 @@ def main(threat_positions=None):
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
-            #     elif event.key in mother_action_keys:
-            #         mother_action = mother_action_keys[event.key]
-            #     elif event.key in child_action_keys and not world.child.is_carried:
-            #         child_action = child_action_keys[event.key]
         
-        # Step world only if there's an action (discrete movement)
-        # m_act = [1, 2, 3, 4, 0]
-        # mother_action = random.choice(m_act)
-        world.step(mother_action, child_action)
-        
-
+        while accumulator >= dt:
+            accumulator -= dt
+            world.step(mother_action, child_action, dt)
 
         # Render in order (background to foreground)
         draw_grid(screen, grid_w, grid_h, cell_px, bg_color, grid_color, outline_color)
-        if world.nest:
-            draw_nest(screen, world.nest, cell_px, nest_color, outline_color)        
+      
         for food in world.foods:
             draw_food(screen, food, cell_px, food_color, outline_color)
-        
-        # Draw threats
-        for threat in world.threats:
-            draw_threat(screen, threat, cell_px, threat_color, outline_color)
-        
-        # Draw child (before mother so mother appears on top)
-        # draw_child(screen, world.child, cell_px, child_color, outline_color)
         
         # Draw mother (on top)
         perception_r = 100 # Pixels
