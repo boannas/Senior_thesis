@@ -1,14 +1,15 @@
+# ==================================================================================
 # World configuration file
-
+# ==================================================================================
 simulation:
-  dt: 0.1
-
-fps: 30   # Frames per second for rendering
+  dt: 0.2
+  fps: 30   # Frames per second for rendering
+  seed: 42  # Random seed for reproducibility
 
 grid:
-  width: 20     
-  height: 20  
-  cell_px: 20
+  width: 5     
+  height: 5  
+  cell_px: 50
 
 colors:
   bg:   [255, 255, 255]       
@@ -19,16 +20,23 @@ colors:
   threat: [200, 200, 200]      
   nest: [255, 193, 7]        
   outline: [120, 120, 120]    # [R, G, B] for entity outlines
+# ==================================================================================
 
 
-# Agent positions
+
+
+
+# ==================================================================================
+# Entity parameters
+# ==================================================================================
+# Agent positions (Need to change in pygame_viewer.py to use this config)
 mothers:
   starts: # initial position [x, y]
   - [7, 7]   
   - [9, 8]
   - [10, 2]
 
-# Entity positions
+# Entity positions (Need to change in pygame_viewer.py to use this config)
 food:
   positions:      # List of food positions
     - [3, 3]
@@ -39,3 +47,4 @@ food:
     - [1, 3]
     - [8, 1]
     - [13, 11]
+# ==================================================================================

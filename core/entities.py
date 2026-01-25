@@ -18,10 +18,10 @@ class Food(Entity):
         super().__init__("Food", x, y)
         self.collected = False
     
-    def get_position(self):
-        if not self.collected:
-            return (self.x, self.y)
-        return None
+    # def get_position(self):
+    #     if not self.collected:
+    #         return (self.x, self.y)
+    #     return None
 
     def collect(self):
         """Mark food as collected"""

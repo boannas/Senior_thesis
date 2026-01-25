@@ -14,9 +14,7 @@ class Agent:
         self.agent_type = agent_type  # "mother" or "child"
 
         # --- Physiological states ---
-        self.hp = hp  # Health points
         self.energy = energy  # Energy level
-
 
     def move(self, dx, dy):
         if self.is_alive():
@@ -25,9 +23,9 @@ class Agent:
         else:
             pass
     
-    def get_position(self):
-        """Return current position as (x, y) tuple"""
-        return (self.x, self.y)
+    # def get_position(self):
+    #     """Return current position as (x, y) tuple"""
+    #     return (self.x, self.y)
     
     def Manhattan_distance_to(self, other_x, other_y):
         """Calculate Manhattan distance to another position"""
@@ -40,12 +38,15 @@ class Agent:
     def heading_towards(self, target_x, target_y):
         """Calculate heading angle towards a target position in radians"""
         return math.atan2(target_y - self.y, target_x - self.x) * (180 / math.pi)
-    
 
     def scan_perception(self, entities, perception_range):
         """Scan for entities within perception range"""
         food_perceived = []
+        mother = []
+        child = []
+        threat = []
         agents_perceived = []
+        
 
         for e in entities:
             if e is self:   # Skip self
@@ -55,21 +56,26 @@ class Agent:
             if dist > perception_range: # Out of range
                 continue
 
-            deg = self.heading_towards(e.x, e.y)
-
             # Food
             if isinstance(e, Food):
                 if getattr(e, "collected", False):
                     continue
-                food_perceived.append((e, dist, deg))
+                food_perceived.append((e, dist))
                 continue
 
             # Agents (other mothers, child, threats)
             if isinstance(e, Agent):
-                agents_perceived.append((e, dist, deg))
+                if e.agent_type == 'mother':
+                    mother.append((e, dist))
+                elif e.agent_type == 'child' and e.is_alive():
+                    print(e.id , e.energy)
+                    child.append((e, dist))
+                elif e.agent_type == 'threat':
+                    threat.append((e, dist))
+                else:
+                    pass
                 continue
-
-        print("agents_perceived:", agents_perceived)
+        agents_perceived = [mother, child, threat]        
         return food_perceived, agents_perceived
 
     
@@ -85,9 +91,38 @@ class Agent:
         return (dx, dy)
 
 
-
 class MotherAgent(Agent):
     """Mother agent - can move and interact with child, food, threats, and nest"""
-    def __init__(self, x, y, grid_w, grid_h, hp, energy):
+    def __init__(self, x, y, grid_w, grid_h, hp, energy, mother_id=None):
         super().__init__(x, y, grid_w, grid_h, hp, energy, agent_type="mother")
+        self.id = mother_id
+        self.child = None  # Reference to carried child agent
+
+    def set_child(self, child_agent):
+        """Set the child agent being carried by mother"""
+        self.child = child_agent
+
+
+class ChildAgent(Agent):
+    """Child agent - can be carried by mother"""
+    def __init__(self, x, y, grid_w, grid_h, hp, energy, child_id=None):
+        super().__init__(x, y, grid_w, grid_h, hp, energy, agent_type="child")
+        self.id = child_id
+        self.mother = None  # Reference to mother agent
+        self.is_carried = False
+        self.distress = 0
+
+    def set_mother(self, mother_agent):
+        """Set the mother agent carrying this child"""
+        self.mother = mother_agent
+
+    def set_carried(self, carried: bool):
+        """Set whether the child is being carried by mother"""
+        self.is_carried = carried
+
+class ThreatAgent(Agent):
+    """Threat agent - can move and pose danger to mother and child"""
+    def __init__(self, x, y, grid_w, grid_h, hp, energy, threat_id=None):
+        super().__init__(x, y, grid_w, grid_h, hp, energy, agent_type="threat")
+        self.id = threat_id
 

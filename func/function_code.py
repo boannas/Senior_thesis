@@ -1,3 +1,4 @@
+import random
 import yaml
 from pathlib import Path
 import pygame
@@ -63,27 +64,37 @@ def draw_mother(surface, mother, cell_px, mother_color, outline_color, label="M"
     text_surface = font.render(label, True, [255,255,255])
     text_rect = text_surface.get_rect(center=(cx, cy))
     surface.blit(text_surface, text_rect)
-
-
-
+    
+    if mother.child is not None and mother.child.is_carried:
+        pygame.draw.circle(surface, (154, 205, 50), (cx, cy), r + 4, width=6)
+        # pygame.draw.circle(surface, outline_color, (cx, cy), r + 4, width=1)
 
 
 
 
 # =======================================================================================================
-def draw_child(surface, child, cell_px, child_color, outline_color):
+def draw_child(surface, child, cell_px, child_color, outline_color, label="C"):
     """Draw child agent"""
-    if child.is_carried:
-        # Don't draw if being carried (mother indicator shows it)
+
+    if child.is_carried or not child.is_alive():
         return
+    
     cx = child.x * cell_px + cell_px // 2
     cy = child.y * cell_px + cell_px // 2
-    r = cell_px // 4  # Child is smaller than mother
+    r = cell_px // 3.5  # Child is smaller than mother
     pygame.draw.circle(surface, child_color, (cx, cy), r)
     pygame.draw.circle(surface, outline_color, (cx, cy), r, width=2)
+
     # Draw perception range (dashed circle)
-    perception_r = r + 30
-    pygame.draw.circle(surface, child_color, (cx, cy), int(perception_r), width=1)
+    # perception_r = r + 30
+    # pygame.draw.circle(surface, child_color, (cx, cy), int(perception_r), width=1)
+
+    # Label Child
+    font_size = int(r * 1.5)
+    font = pygame.font.SysFont(None, font_size)
+    text_surface = font.render(label, True, [255,255,255])
+    text_rect = text_surface.get_rect(center=(cx, cy))
+    surface.blit(text_surface, text_rect)
 
 def draw_food(surface, food, cell_px, food_color, outline_color):
     """Draw food entity"""
@@ -99,12 +110,10 @@ def draw_food(surface, food, cell_px, food_color, outline_color):
 
 def draw_threat(surface, threat, cell_px, threat_color, outline_color):
     """Draw threat entity"""
-    if not threat.active:
-        return
     cx = threat.x * cell_px + cell_px // 2
     cy = threat.y * cell_px + cell_px // 2
     # Draw threat as a triangle (warning symbol)
-    r = cell_px // 2.5
+    r = cell_px // 3
     points = [
         (cx, cy - r),  # Top
         (cx - r, cy + r),  # Bottom left
@@ -113,17 +122,58 @@ def draw_threat(surface, threat, cell_px, threat_color, outline_color):
     pygame.draw.polygon(surface, threat_color, points)
     pygame.draw.polygon(surface, outline_color, points, width=2)
 
-    # Draw perception range (dashed circle)
+    # # Draw perception range (dashed circle)
     perception_r = r + 40
     pygame.draw.circle(surface, outline_color, (cx, cy), int(perception_r), width=1, )
 
-def draw_nest(surface, nest, cell_px, nest_color, outline_color):
-    """Draw nest entity"""
-    # Draw nest as a 3x3 square
-    pygame.draw.rect(surface, nest_color, ((nest.x-1) * cell_px, (nest.y-1) * cell_px, cell_px*3, cell_px*3))
-    cx = nest.x * cell_px + cell_px // 2
-    cy = nest.y * cell_px + cell_px // 2    
-    r = cell_px 
-    # Draw inner circle for nest pattern
-    inner_r = r 
-    pygame.draw.circle(surface, outline_color, (cx, cy), inner_r, width=1)
+# def draw_nest(surface, nest, cell_px, nest_color, outline_color):
+#     """Draw nest entity"""
+#     # Draw nest as a 3x3 square
+#     pygame.draw.rect(surface, nest_color, ((nest.x-1) * cell_px, (nest.y-1) * cell_px, cell_px*3, cell_px*3))
+#     cx = nest.x * cell_px + cell_px // 2
+#     cy = nest.y * cell_px + cell_px // 2    
+#     r = cell_px 
+#     # Draw inner circle for nest pattern
+#     inner_r = r 
+#     pygame.draw.circle(surface, outline_color, (cx, cy), inner_r, width=1)
+
+
+def intensity_to_color(value, vmin=0, vmax=100):
+    value = max(vmin, min(vmax, value))
+    t = (value - vmin) / (vmax - vmin)
+    if t < 0.5:
+        # Yellow -> Green
+        r = int(255 * (1 - t / 0.5))
+        g = 255
+        b = 0
+    else:
+        # Green -> Blue
+        r = 0
+        g = int(255 * (1 - (t - 0.5) / 0.5))
+        b = int(255 * ((t - 0.5) / 0.5))
+    return (r, g, b)
+
+
+def random_positions(n, grid_w, grid_h):
+    return [[random.randint(0, grid_w - 1),
+             random.randint(0, grid_h - 1)]
+            for _ in range(n)]
+
+
+def random_unique_positions(n, grid_w, grid_h, occupied=None):
+    """
+    Generate n unique positions on a grid, avoiding occupied cells.
+    """
+    if occupied is None:
+        occupied = set()
+
+    all_cells = [(x, y) for x in range(grid_w) for y in range(grid_h)]
+    free_cells = list(set(all_cells) - occupied)
+
+    if n > len(free_cells):
+        raise ValueError("Not enough free cells to place all entities.")
+
+    chosen = random.sample(free_cells, n)
+    occupied.update(chosen)
+
+    return [[x, y] for x, y in chosen], occupied

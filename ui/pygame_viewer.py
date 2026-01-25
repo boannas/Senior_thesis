@@ -3,6 +3,7 @@ import pygame
 import sys
 from pathlib import Path
 import random
+import numpy as np
 
 # Add parent directory to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -10,15 +11,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.world import World
 from func.function_code import (
     load_config, draw_grid, draw_mother, draw_child, 
-    draw_food, draw_threat, draw_nest
+    draw_food, draw_threat, random_positions, intensity_to_color, random_unique_positions
 )
 
-random.seed(42) # Fixed seed for reproducibility
-
-def random_positions(n, grid_w, grid_h):
-    return [[random.randint(0, grid_w - 1),
-             random.randint(0, grid_h - 1)]
-            for _ in range(n)]
 
 def main(threat_positions=None):
 
@@ -30,23 +25,29 @@ def main(threat_positions=None):
     grid_w = cfg["grid"]["width"]
     grid_h = cfg["grid"]["height"]
     cell_px = cfg["grid"]["cell_px"]
-    fps = cfg["fps"]
+    fps = cfg["simulation"]["fps"]
     dt = cfg["simulation"]["dt"]
+    seed = cfg["simulation"]["seed"]
 
-    # Agent positions
-    # mother_starts = cfg["mothers"]["starts"]
-    mother_starts = random_positions(
-        n=10,        # number of mothers
-        grid_w=grid_w,  # grid width
-        grid_h=grid_h   # grid height
+    random.seed(seed)   # Fixed seed for reproducibility
+    occupied = set()
+
+
+    mother_starts, occupied = random_unique_positions(
+        n=1, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
-        
+
+    child_starts, occupied = random_unique_positions(
+        n=1, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+    )
+
+    threat_starts, occupied = random_unique_positions(
+        n=1, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+    )
     # Entity positions
     # food_positions = cfg["food"].get("positions", [])
-    food_positions = random_positions(
-    n=20,        # number of positions
-    grid_w=grid_w,  # grid width
-    grid_h=grid_h   # grid height
+    food_positions, occupied = random_unique_positions(
+        n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
     # print("food_positions:", food_positions)
@@ -54,6 +55,7 @@ def main(threat_positions=None):
     bg_color = tuple(cfg["colors"]["bg"])
     grid_color = tuple(cfg["colors"]["grid"])
     mother_color = tuple(cfg["colors"]["mother"])
+    threat_colot = tuple(cfg["colors"]["threat"])
     food_color = tuple(cfg["colors"]["food"])
     outline_color = tuple(cfg["colors"]["outline"])
     
@@ -71,15 +73,18 @@ def main(threat_positions=None):
     world = World(
         grid_w, grid_h,
         mother_starts=mother_starts,
+        child_start=child_starts,
         food_positions=food_positions,
-        threat_positions=threat_positions,
-        # seed=seed
+        threat_starts=threat_starts,
     )
     
     # Main game loop
     running = True
     accumulator = 0.0
 
+    # ==============================================
+    # ------------- Main Update Loop ---------------
+    # ==============================================
     while running:
         frame_time = clock.tick(fps) / 1000.0  # seconds
         accumulator += frame_time
@@ -96,6 +101,10 @@ def main(threat_positions=None):
             accumulator -= dt
             world.step(dt)
 
+        # ==============================================
+        # ------------- Rendering ----------------
+        # ==============================================
+
         # Render in order (background to foreground)
         draw_grid(screen, grid_w, grid_h, cell_px, bg_color, grid_color, outline_color)
       
@@ -106,6 +115,15 @@ def main(threat_positions=None):
         for i, m in enumerate(world.mothers):
             draw_mother(screen, m, cell_px, mother_color, outline_color, label=f"M{i}")
 
+        # Draw child (on top)
+        for i, c in enumerate(world.children):
+            # c.distress += np.random.uniform(1, 3)           # dynamic distress testing
+            color = intensity_to_color(c.energy)
+            draw_child(screen, c, cell_px, color, outline_color, label=f"C{i}")
+
+        # Draw threat
+        for i, t in enumerate(world.threats):
+            draw_threat(screen, t, cell_px, threat_colot, outline_color)
         # Update display
         pygame.display.flip()
         clock.tick(fps)
