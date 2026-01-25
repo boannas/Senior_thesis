@@ -1,6 +1,8 @@
 import math
 import random
 
+from core.entities import Food
+
 
 class Agent:
     """Base class for agents (mother and child)"""
@@ -39,19 +41,37 @@ class Agent:
         """Calculate heading angle towards a target position in radians"""
         return math.atan2(target_y - self.y, target_x - self.x) * (180 / math.pi)
     
+
     def scan_perception(self, entities, perception_range):
         """Scan for entities within perception range"""
-        perceived = []
-        print(perceived)
-        for entity in entities:
-            dist = self.Manhattan_distance_to(entity.x, entity.y)
-            deg = self.heading_towards(entity.x, entity.y)
-            
-        
-            if dist <= perception_range and not entity.collected:
-                perceived.append((entity, dist, deg))
-                print(f"{self.agent_type.capitalize()} perceived {entity.name} at ({entity.x}, {entity.y}) ")
-        return perceived
+        food_perceived = []
+        agents_perceived = []
+
+        for e in entities:
+            if e is self:   # Skip self
+                continue
+
+            dist = self.Manhattan_distance_to(e.x, e.y)
+            if dist > perception_range: # Out of range
+                continue
+
+            deg = self.heading_towards(e.x, e.y)
+
+            # Food
+            if isinstance(e, Food):
+                if getattr(e, "collected", False):
+                    continue
+                food_perceived.append((e, dist, deg))
+                continue
+
+            # Agents (other mothers, child, threats)
+            if isinstance(e, Agent):
+                agents_perceived.append((e, dist, deg))
+                continue
+
+        print("agents_perceived:", agents_perceived)
+        return food_perceived, agents_perceived
+
     
     def step_towards(self, target_x, target_y):
         """

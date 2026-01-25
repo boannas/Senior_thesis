@@ -48,7 +48,7 @@ def draw_grid(surface, grid_w, grid_h, cell_px, bg, grid_color, outline):
     for y in range(1, grid_h):
         pygame.draw.line(surface, grid_color, (0, y * cell_px), (grid_w * cell_px, y * cell_px))
 
-def draw_mother(surface, mother, cell_px, mother_color, outline_color):
+def draw_mother(surface, mother, cell_px, mother_color, outline_color, label="M"):
     """Draw mother agent"""
     cx = mother.x * cell_px + cell_px // 2
     cy = mother.y * cell_px + cell_px // 2
@@ -60,7 +60,7 @@ def draw_mother(surface, mother, cell_px, mother_color, outline_color):
     # Label Mother
     font_size = int(r * 1.5)
     font = pygame.font.SysFont(None, font_size)
-    text_surface = font.render("M", True, [255,255,255])
+    text_surface = font.render(label, True, [255,255,255])
     text_rect = text_surface.get_rect(center=(cx, cy))
     surface.blit(text_surface, text_rect)
 

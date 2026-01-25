@@ -7,12 +7,13 @@ class World:
     def __init__(self, grid_w, grid_h, mother_starts=None, child_start=None, 
                  food_positions=None, threat_positions=None, nest_position=None, seed=42):
         
+        random.seed(seed)   # Fixed seed for reproducibility
+
         # Initialize mother agents
         self.mothers = []
         for (mx, my) in mother_starts:
             self.mothers.append(MotherAgent(mx, my, grid_w, grid_h, hp=100, energy=100))
 
-        random.seed(seed)
         self.t = 0
         self.grid_w = grid_w
         self.grid_h = grid_h
@@ -28,28 +29,27 @@ class World:
         proposals = {}
 
         for mother in self.mothers:
-            perceived = mother.scan_perception(self.foods, perception_range=perception_range)
+            food_perceived, agents_perceived = mother.scan_perception(self.foods + self.mothers, perception_range=perception_range)
 
-            if not perceived:
-                dx, dy = mother.step_towards(4,4)
+            if not food_perceived:
+                dx, dy = mother.step_towards(self.grid_w // 2, self.grid_h // 2)
                 nx = max(0, min(self.grid_w - 1, mother.x + dx))
                 ny = max(0, min(self.grid_h - 1, mother.y + dy))
                 proposals[mother] = (nx, ny)
                 
                 continue
 
-            perceived.sort(key=lambda t: t[1])
+            food_perceived.sort(key=lambda t: t[1])
 
-            target_food = perceived[0][0]   # nearest food
+            target_food = food_perceived[0][0]   # nearest food
             dx, dy = mother.step_towards(target_food.x, target_food.y)
             nx = max(0, min(self.grid_w - 1, mother.x + dx))
             ny = max(0, min(self.grid_h - 1, mother.y + dy))
             proposals[mother] = (nx, ny)
 
             # Check if food is collected (distance == 0)
-            if perceived[0][1] == 0 and not target_food.collected: 
+            if food_perceived[0][1] == 0 and not target_food.collected: 
                 target_food.collect()
-            
 
         self.resolve_and_apply_moves(self.mothers, proposals)
 

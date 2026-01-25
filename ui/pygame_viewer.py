@@ -13,6 +13,12 @@ from func.function_code import (
     draw_food, draw_threat, draw_nest
 )
 
+random.seed(42) # Fixed seed for reproducibility
+
+def random_positions(n, grid_w, grid_h):
+    return [[random.randint(0, grid_w - 1),
+             random.randint(0, grid_h - 1)]
+            for _ in range(n)]
 
 def main(threat_positions=None):
 
@@ -25,15 +31,25 @@ def main(threat_positions=None):
     grid_h = cfg["grid"]["height"]
     cell_px = cfg["grid"]["cell_px"]
     fps = cfg["fps"]
-    seed = cfg["seed"]
     dt = cfg["simulation"]["dt"]
 
     # Agent positions
-    mother_starts = cfg["mothers"]["starts"]
+    # mother_starts = cfg["mothers"]["starts"]
+    mother_starts = random_positions(
+        n=10,        # number of mothers
+        grid_w=grid_w,  # grid width
+        grid_h=grid_h   # grid height
+    )
         
     # Entity positions
-    food_positions = cfg["food"].get("positions", [])
-    
+    # food_positions = cfg["food"].get("positions", [])
+    food_positions = random_positions(
+    n=20,        # number of positions
+    grid_w=grid_w,  # grid width
+    grid_h=grid_h   # grid height
+    )
+
+    # print("food_positions:", food_positions)
     # Colors
     bg_color = tuple(cfg["colors"]["bg"])
     grid_color = tuple(cfg["colors"]["grid"])
@@ -57,7 +73,7 @@ def main(threat_positions=None):
         mother_starts=mother_starts,
         food_positions=food_positions,
         threat_positions=threat_positions,
-        seed=seed
+        # seed=seed
     )
     
     # Main game loop
@@ -87,8 +103,8 @@ def main(threat_positions=None):
             draw_food(screen, food, cell_px, food_color, outline_color)
         
         # Draw mother (on top)
-        for m in world.mothers:
-            draw_mother(screen, m, cell_px, mother_color, outline_color)
+        for i, m in enumerate(world.mothers):
+            draw_mother(screen, m, cell_px, mother_color, outline_color, label=f"M{i}")
 
         # Update display
         pygame.display.flip()
