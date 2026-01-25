@@ -16,8 +16,6 @@ class Food(Entity):
     """Food entity that can be collected by agents"""
     def __init__(self, x, y):
         super().__init__("Food", x, y)
-        # self.x = x
-        # self.y = y
         self.collected = False
     
     def get_position(self):

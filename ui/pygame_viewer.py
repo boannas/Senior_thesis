@@ -1,7 +1,4 @@
-"""
-Grid World with Agent - Pygame Viewer
-Main entry point for running the grid world simulation with Mother, Child, Food, Threat, and Nest entities.
-"""
+
 import pygame
 import sys
 from pathlib import Path
@@ -18,13 +15,7 @@ from func.function_code import (
 
 
 def main(threat_positions=None):
-    """
-    Main function to run the gridworld simulation.
-    
-    Args:
-        threat_positions: Optional list of threat positions [(x, y), ...]. 
-                         If None, threats will be loaded from config file.
-    """
+
     # Load configuration
     config_path = Path(__file__).parent.parent / "base.yaml"
     cfg = load_config(str(config_path))
@@ -37,9 +28,8 @@ def main(threat_positions=None):
     seed = cfg["seed"]
     dt = cfg["simulation"]["dt"]
 
-    
     # Agent positions
-    mother_start = cfg["mother"]["start"]
+    mother_starts = cfg["mothers"]["starts"]
         
     # Entity positions
     food_positions = cfg["food"].get("positions", [])
@@ -64,7 +54,7 @@ def main(threat_positions=None):
     # Create world with all entities
     world = World(
         grid_w, grid_h,
-        mother_start=mother_start,
+        mother_starts=mother_starts,
         food_positions=food_positions,
         threat_positions=threat_positions,
         seed=seed
@@ -77,9 +67,6 @@ def main(threat_positions=None):
     while running:
         frame_time = clock.tick(fps) / 1000.0  # seconds
         accumulator += frame_time
-
-        mother_action = 0
-        child_action = None
         
         # Handle events
         for event in pygame.event.get():
@@ -91,7 +78,7 @@ def main(threat_positions=None):
         
         while accumulator >= dt:
             accumulator -= dt
-            world.step(mother_action, child_action, dt)
+            world.step(dt)
 
         # Render in order (background to foreground)
         draw_grid(screen, grid_w, grid_h, cell_px, bg_color, grid_color, outline_color)
@@ -100,9 +87,9 @@ def main(threat_positions=None):
             draw_food(screen, food, cell_px, food_color, outline_color)
         
         # Draw mother (on top)
-        perception_r = 100 # Pixels
-        draw_mother(screen, world.mother, cell_px, mother_color, outline_color, perception_r=perception_r)
-        
+        for m in world.mothers:
+            draw_mother(screen, m, cell_px, mother_color, outline_color)
+
         # Update display
         pygame.display.flip()
         clock.tick(fps)

@@ -48,7 +48,7 @@ def draw_grid(surface, grid_w, grid_h, cell_px, bg, grid_color, outline):
     for y in range(1, grid_h):
         pygame.draw.line(surface, grid_color, (0, y * cell_px), (grid_w * cell_px, y * cell_px))
 
-def draw_mother(surface, mother, cell_px, mother_color, outline_color, perception_r=150):
+def draw_mother(surface, mother, cell_px, mother_color, outline_color):
     """Draw mother agent"""
     cx = mother.x * cell_px + cell_px // 2
     cy = mother.y * cell_px + cell_px // 2

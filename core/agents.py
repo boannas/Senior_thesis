@@ -15,23 +15,17 @@ class Agent:
         self.hp = hp  # Health points
         self.energy = energy  # Energy level
 
-        
 
     def move(self, dx, dy):
         if self.is_alive():
             self.x = max(0, min(self.grid_w - 1, self.x + dx))
             self.y = max(0, min(self.grid_h - 1, self.y + dy))
-            print(f"{self.agent_type.capitalize()} moved to ({self.x}, {self.y}). Energy: {self.energy}")
         else:
-            print(f"{self.agent_type.capitalize()} is not alive and cannot move.")
+            pass
     
     def get_position(self):
         """Return current position as (x, y) tuple"""
         return (self.x, self.y)
-    
-    def distance_to(self, other_x, other_y):
-        """Calculate Euclidean distance to another position"""
-        return ((self.x - other_x) ** 2 + (self.y - other_y) ** 2) ** 0.5
     
     def Manhattan_distance_to(self, other_x, other_y):
         """Calculate Manhattan distance to another position"""
@@ -48,9 +42,12 @@ class Agent:
     def scan_perception(self, entities, perception_range):
         """Scan for entities within perception range"""
         perceived = []
+        print(perceived)
         for entity in entities:
             dist = self.Manhattan_distance_to(entity.x, entity.y)
             deg = self.heading_towards(entity.x, entity.y)
+            
+        
             if dist <= perception_range and not entity.collected:
                 perceived.append((entity, dist, deg))
                 print(f"{self.agent_type.capitalize()} perceived {entity.name} at ({entity.x}, {entity.y}) ")
