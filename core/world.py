@@ -1,5 +1,4 @@
 import random
-# from core import agents
 from core.agents import ChildAgent, MotherAgent, ThreatAgent
 from core.entities import Food
 
@@ -18,8 +17,7 @@ class World:
         self.threats = []
 
         # 8-directions + stay
-        self.RANDOM_MOVES = [(0,0),(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)]
-
+        self.RANDOM_MOVES = [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)]
 
         # Create mother agents
         for i, (mx, my) in enumerate(mother_starts):
@@ -59,41 +57,54 @@ class World:
     def mother_decision(self):
         perception_range = 100 
         proposals = {}
-        # dx, dy = 0, 0
+        occupied_now = {(m.x, m.y) for m in self.mothers}
+
+        # Entities and agent - Mother received (All)
+        mother_receive = self.foods + self.mothers + self.children + self.threats
 
         for mother in self.mothers:
-            food_perceived, agents_perceived = mother.scan_perception(self.foods + self.mothers + self.children + self.threats, perception_range=perception_range)
-
-            # print("mother", agents_perceived[0], '\n')    
-            # print("child", agents_perceived[1], '\n')    
-            # print("threat", agents_perceived[2], '\n')    
+            food_perceived, agents_perceived = mother.scan_perception(mother_receive, perception_range=perception_range)
 
             if not food_perceived:
                 child = mother.child
                 
                 if child is not None:
-                    dx, dy = mother.step_towards(child.x, child.y)
+                    goal = (child.x, child.y)
+
+                    dx, dy = mother.step_towards(*goal)
 
                     nx = max(0, min(self.grid_w - 1, mother.x + dx))
                     ny = max(0, min(self.grid_h - 1, mother.y + dy))
+
+                    # if blocked right now, locally replan one step
+                    if (nx, ny) in occupied_now and (nx, ny) != (mother.x, mother.y):
+                        nx, ny = self.best_step(mother, goal, occupied_now)
+                        # print(mother.id , nx, ny)
+                        # print(mother)
                     proposals[mother] = (nx, ny)
 
-                    if child is not None and mother.Manhattan_distance_to(child.x, child.y) == 0:
-                        # Pick up child
+                    if child is not None and abs(nx - child.x) + abs(ny - child.y) == 0:
                         child.set_carried(True)
                 continue
 
             food_perceived.sort(key=lambda t: t[1])
 
             target_food = food_perceived[0][0]   # nearest food
-            dx, dy = mother.step_towards(target_food.x, target_food.y)
+            goal = (target_food.x, target_food.y)
+            dx, dy = mother.step_towards(*goal)
             nx = max(0, min(self.grid_w - 1, mother.x + dx))
             ny = max(0, min(self.grid_h - 1, mother.y + dy))
+            # if blocked right now, locally replan one step
+            if (nx, ny) in occupied_now and (nx, ny) != (mother.x, mother.y):
+                nx, ny = self.best_step(mother, goal, occupied_now)
+
             proposals[mother] = (nx, ny)
 
+
             # Check if food is collected (distance == 0)
-            if food_perceived[0][1] == 0 and not target_food.collected: 
+            if abs(nx - target_food.x) + abs(ny - target_food.y) == 0 and not target_food.collected:
                 target_food.collect()
+
 
         self.resolve_and_apply_moves(self.mothers, proposals)
 
@@ -135,16 +146,21 @@ class World:
             a.x, a.y = nx, ny
             occupied.add((nx, ny))
         
+
     def threat_decision(self):
-        perception_range = 2 
-        avoid_range = 0
+        perception_range = 3 
+        avoid_range = 1
         proposals = {}
 
+        # Entities and agent - Threat received (mother + child) not care other threats & food  
+        threat_receive = self.mothers + self.children
+
         for threat in self.threats:
-            _, agents_perceived = threat.scan_perception(self.mothers + self.children, perception_range)
+            _, agents_perceived = threat.scan_perception(threat_receive, perception_range)
             mother_percieved = agents_perceived[0]
             child_perceived = agents_perceived[1]
 
+            # # 1st priority: Afraid to mother agent (Moving away from mother)
             if mother_percieved:
                 mother_percieved.sort(key=lambda t:t[1])
                 closest_mother, m_dist = mother_percieved[0]
@@ -166,31 +182,67 @@ class World:
                     # print(best_moves)
 
                     proposals[threat] = random.choice(best_moves)
-                    continue
+                    # continue
 
-            elif not child_perceived:
+            # 2nd priority: Child huntering (Moving closer to closest child)
+            elif child_perceived:
+                target_child, _ = child_perceived[0]
+                if not target_child.is_carried:
+                    dx, dy = threat.step_towards(target_child.x, target_child.y)
+                    nx = max(0, min(self.grid_w - 1, threat.x + dx))
+                    ny = max(0, min(self.grid_h - 1, threat.y + dy))
+                    proposals[threat] = (nx, ny)
+                
+                dist = abs(target_child.x - threat.x) + abs(target_child.y - threat.y)
+                print([threat.x, threat.y], [target_child.x, target_child.y])
+                # print(target_child, target_child.energy, dist)
+                # Attack if on child
+                if dist == 0 and target_child.is_alive():
+                    target_child.energy -= random.randint(5, 10)
+
+            # last choice: Threat move randomly
+            else:
                 dx, dy = random.choice(self.RANDOM_MOVES)
                 nx = max(0, min(self.grid_w - 1, threat.x + dx))
                 ny = max(0, min(self.grid_h - 1, threat.y + dy))
                 proposals[threat] = (nx, ny)
-                continue
+                # continue
 
-            target_child, dist = child_perceived[0]
-            if not target_child.is_carried:
-                dx, dy = threat.step_towards(target_child.x, target_child.y)
-                nx = max(0, min(self.grid_w - 1, threat.x + dx))
-                ny = max(0, min(self.grid_h - 1, threat.y + dy))
-                proposals[threat] = (nx, ny)
-            else:
-                # dx, dy = random.choice(self.RANDOM_MOVES)
-                pass
-
-
-
-            # Attack if on child
-            if dist == 0 and target_child.is_alive():
-                target_child.energy -= random.randint(5, 10)
+            
 
         self.resolve_and_apply_moves(self.threats, proposals)
 
+    def best_step(self, mother, goal_xy, occupied_now):
+        gx, gy = goal_xy
+        candidates = [(mother.x, mother.y)]
+        for dx, dy in self.RANDOM_MOVES:
+            nx, ny = mother.x + dx, mother.y + dy
+            if 0 <= nx < self.grid_w and 0 <= ny < self.grid_h:
+                candidates.append((nx, ny))
 
+        def score(cell):
+            nx, ny = cell
+
+            # Check occupied grid
+            if (nx, ny) in occupied_now and (nx, ny) != (mother.x, mother.y):
+                return 10**9
+
+            s = abs(nx - gx) + abs(ny - gy)     # Distance from possible action <-> goal point
+
+            for (ox, oy) in occupied_now:
+                print(occupied_now)
+                if (ox, oy) == (mother.x, mother.y):   
+                    continue
+
+                # Checking not to move closer to another mother 
+                if abs(nx - ox) + abs(ny - oy) == 1:
+                    # print([nx, ny], [ox, oy])
+                    s += 0
+
+            # Stay the same place will be small pernalty
+            if (nx, ny) == (mother.x, mother.y):
+                s += 10**9
+            return s
+       
+        print([mother.x, mother.y], candidates , min(candidates))
+        return min(candidates, key=score)

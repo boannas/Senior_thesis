@@ -68,7 +68,7 @@ class Agent:
                 if e.agent_type == 'mother':
                     mother.append((e, dist))
                 elif e.agent_type == 'child' and e.is_alive():
-                    print(e.id , e.energy)
+                    # print(e.id , e.energy)
                     child.append((e, dist))
                 elif e.agent_type == 'threat':
                     threat.append((e, dist))

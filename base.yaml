@@ -2,13 +2,13 @@
 # World configuration file
 # ==================================================================================
 simulation:
-  dt: 0.2
+  dt: 0.1
   fps: 30   # Frames per second for rendering
   seed: 42  # Random seed for reproducibility
 
 grid:
-  width: 5     
-  height: 5  
+  width: 10     
+  height: 10  
   cell_px: 50
 
 colors:
