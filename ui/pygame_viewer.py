@@ -32,17 +32,18 @@ def main(threat_positions=None):
     random.seed(seed)   # Fixed seed for reproducibility
     occupied = set()
 
-
+    # mother_starts = cfg['mothers']['starts']
     mother_starts, occupied = random_unique_positions(
-        n=30, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
+    # child_starts = cfg['children']['starts']
     child_starts, occupied = random_unique_positions(
-        n=30, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=5, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
     threat_starts, occupied = random_unique_positions(
-        n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=1, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
     # Entity positions
     # food_positions = cfg["food"].get("positions", [])
