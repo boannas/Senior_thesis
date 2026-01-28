@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from core.world import World
 from func.function_code import (
     load_config, draw_grid, draw_mother, draw_child, 
-    draw_food, draw_threat, random_positions, intensity_to_color, random_unique_positions
+    draw_food, draw_threat, intensity_to_color, random_unique_positions
 )
 
 
@@ -34,21 +34,21 @@ def main(threat_positions=None):
 
     # mother_starts = cfg['mothers']['starts']
     mother_starts, occupied = random_unique_positions(
-        n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=10, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
     # child_starts = cfg['children']['starts']
     child_starts, occupied = random_unique_positions(
-        n=5, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=10, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
     threat_starts, occupied = random_unique_positions(
-        n=1, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
     # Entity positions
     # food_positions = cfg["food"].get("positions", [])
     food_positions, occupied = random_unique_positions(
-        n=5, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=15, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
     # print("food_positions:", food_positions)
@@ -124,7 +124,8 @@ def main(threat_positions=None):
 
         # Draw threat
         for i, t in enumerate(world.threats):
-            draw_threat(screen, t, cell_px, threat_colot, outline_color)
+            percept_range = cell_px * 1
+            draw_threat(screen, t, cell_px, threat_colot, outline_color, perception_range=percept_range)
         # Update display
         pygame.display.flip()
         clock.tick(fps)

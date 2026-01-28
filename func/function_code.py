@@ -3,6 +3,7 @@ import yaml
 from pathlib import Path
 import pygame
 import math
+import heapq
 
 def load_config(path: str) -> dict:
     # sensible defaults (used if yaml omits a field)
@@ -39,8 +40,10 @@ def load_config(path: str) -> dict:
         deep_merge(cfg, user)
     return cfg
 
-
+# ===================================================================
 # -------- Rendering --------
+# ===================================================================
+
 def draw_grid(surface, grid_w, grid_h, cell_px, bg, grid_color, outline):
     surface.fill(bg)
     pygame.draw.rect(surface, outline, (0, 0, grid_w * cell_px, grid_h * cell_px), width=2)
@@ -65,14 +68,14 @@ def draw_mother(surface, mother, cell_px, mother_color, outline_color, label="M"
     text_rect = text_surface.get_rect(center=(cx, cy))
     surface.blit(text_surface, text_rect)
     
+    # Child Carried
     if mother.child is not None and mother.child.is_carried:
-        pygame.draw.circle(surface, (154, 205, 50), (cx, cy), r + 4, width=6)
+        pygame.draw.circle(surface, (154, 205, 50), (cx, cy), r + 4, width= 4)
         # pygame.draw.circle(surface, outline_color, (cx, cy), r + 4, width=1)
 
+    if mother.pick_food:
+        pygame.draw.circle(surface, (0,0,0), (cx, cy), r + 3, width=4)
 
-
-
-# =======================================================================================================
 def draw_child(surface, child, cell_px, child_color, outline_color, label="C"):
     """Draw child agent"""
 
@@ -108,7 +111,7 @@ def draw_food(surface, food, cell_px, food_color, outline_color):
     pygame.draw.rect(surface, food_color, rect)
     pygame.draw.rect(surface, outline_color, rect, width=1)
 
-def draw_threat(surface, threat, cell_px, threat_color, outline_color):
+def draw_threat(surface, threat, cell_px, threat_color, outline_color, perception_range):
     """Draw threat entity"""
     cx = threat.x * cell_px + cell_px // 2
     cy = threat.y * cell_px + cell_px // 2
@@ -123,8 +126,8 @@ def draw_threat(surface, threat, cell_px, threat_color, outline_color):
     pygame.draw.polygon(surface, outline_color, points, width=2)
 
     # # Draw perception range (dashed circle)
-    perception_r = r + 40
-    pygame.draw.circle(surface, outline_color, (cx, cy), int(perception_r), width=1, )
+    perception_r = r + perception_range
+    pygame.draw.circle(surface, outline_color, (cx, cy), int(perception_r), width=1)
 
 # def draw_nest(surface, nest, cell_px, nest_color, outline_color):
 #     """Draw nest entity"""
@@ -136,7 +139,6 @@ def draw_threat(surface, threat, cell_px, threat_color, outline_color):
 #     # Draw inner circle for nest pattern
 #     inner_r = r 
 #     pygame.draw.circle(surface, outline_color, (cx, cy), inner_r, width=1)
-
 
 def intensity_to_color(value, vmin=0, vmax=100):
     value = max(vmin, min(vmax, value))
@@ -154,11 +156,13 @@ def intensity_to_color(value, vmin=0, vmax=100):
     return (r, g, b)
 
 
-def random_positions(n, grid_w, grid_h):
-    return [[random.randint(0, grid_w - 1),
-             random.randint(0, grid_h - 1)]
-            for _ in range(n)]
+# ===================================================================
 
+
+
+# ===================================================================
+# Initialize
+# ===================================================================
 
 def random_unique_positions(n, grid_w, grid_h, occupied=None):
     """
@@ -177,3 +181,73 @@ def random_unique_positions(n, grid_w, grid_h, occupied=None):
     occupied.update(chosen)
 
     return [[x, y] for x, y in chosen], occupied
+
+
+
+# ===================================================================
+# Path planning
+# ===================================================================
+
+def octile_heuristic(a, b):
+    (x1, y1), (x2, y2) = a, b
+    dx, dy = abs(x1 - x2), abs(y1 - y2)
+    # diagonal cost ~ sqrt(2), straight cost 1
+    return (dx + dy) + (math.sqrt(2) - 2) * min(dx, dy)
+
+def astar(start, goal, grid_w, grid_h, blocked, moves_8=True):
+    if start == goal:
+        return [start]
+
+    if moves_8:
+        nbrs = [(1,0),(-1,0),(0,1),(0,-1),(1,1),(1,-1),(-1,1),(-1,-1)]
+        def step_cost(dx, dy):  # diagonal costs more
+            return math.sqrt(2) if dx != 0 and dy != 0 else 1.0
+        h = octile_heuristic
+    else:
+        nbrs = [(1,0),(-1,0),(0,1),(0,-1)]
+        def step_cost(dx, dy):
+            return 1.0
+        h = lambda a, b: abs(a[0]-b[0]) + abs(a[1]-b[1])
+
+    open_heap = []
+    heapq.heappush(open_heap, (h(start, goal), 0.0, start))
+    came_from = {}
+    gscore = {start: 0.0}
+    closed = set()
+
+    while open_heap:
+        _, g, cur = heapq.heappop(open_heap)
+        if cur in closed:
+            continue
+        closed.add(cur)
+
+        if cur == goal:
+            # reconstruct
+            path = [cur]
+            while cur in came_from:
+                cur = came_from[cur]
+                path.append(cur)
+            path.reverse()
+            return path
+
+        cx, cy = cur
+        for dx, dy in nbrs:
+            nx, ny = cx + dx, cy + dy
+            if not (0 <= nx < grid_w and 0 <= ny < grid_h):
+                continue
+
+            nxt = (nx, ny)
+
+            # blocked cells are not allowed EXCEPT goal
+            if nxt in blocked and nxt != goal:
+                continue
+
+            ng = g + step_cost(dx, dy)
+            if ng < gscore.get(nxt, float("inf")):
+                gscore[nxt] = ng
+                came_from[nxt] = cur
+                f = ng + h(nxt, goal)
+                heapq.heappush(open_heap, (f, ng, nxt))
+
+    return None  # no path
+

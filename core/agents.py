@@ -15,17 +15,6 @@ class Agent:
 
         # --- Physiological states ---
         self.energy = energy  # Energy level
-
-    def move(self, dx, dy):
-        if self.is_alive():
-            self.x = max(0, min(self.grid_w - 1, self.x + dx))
-            self.y = max(0, min(self.grid_h - 1, self.y + dy))
-        else:
-            pass
-    
-    # def get_position(self):
-    #     """Return current position as (x, y) tuple"""
-    #     return (self.x, self.y)
     
     def Manhattan_distance_to(self, other_x, other_y):
         """Calculate Manhattan distance to another position"""
@@ -53,7 +42,7 @@ class Agent:
                 continue
 
             dist = self.Manhattan_distance_to(e.x, e.y)
-            if dist > perception_range: # Out of range
+            if dist > perception_range: # Out of perception range
                 continue
 
             # Food
@@ -97,11 +86,14 @@ class MotherAgent(Agent):
         super().__init__(x, y, grid_w, grid_h, hp, energy, agent_type="mother")
         self.id = mother_id
         self.child = None  # Reference to carried child agent
+        self.pick_food = False
 
     def set_child(self, child_agent):
         """Set the child agent being carried by mother"""
         self.child = child_agent
 
+    def picking_food(self, picking: bool):
+        self.pick_food = picking
 
 class ChildAgent(Agent):
     """Child agent - can be carried by mother"""
