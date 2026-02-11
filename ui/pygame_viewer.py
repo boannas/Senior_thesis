@@ -34,12 +34,12 @@ def main(threat_positions=None):
 
     # mother_starts = cfg['mothers']['starts']
     mother_starts, occupied = random_unique_positions(
-        n=10, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=2, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
     # child_starts = cfg['children']['starts']
     child_starts, occupied = random_unique_positions(
-        n=10, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=2, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
     threat_starts, occupied = random_unique_positions(
@@ -48,7 +48,7 @@ def main(threat_positions=None):
     # Entity positions
     # food_positions = cfg["food"].get("positions", [])
     food_positions, occupied = random_unique_positions(
-        n=15, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=5, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
     # print("food_positions:", food_positions)

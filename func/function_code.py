@@ -56,7 +56,7 @@ def draw_mother(surface, mother, cell_px, mother_color, outline_color, label="M"
     """Draw mother agent"""
     cx = mother.x * cell_px + cell_px // 2
     cy = mother.y * cell_px + cell_px // 2
-    r = cell_px // 2.5
+    r = cell_px // 3
     # Draw mother as a circle
     pygame.draw.circle(surface, mother_color, (cx, cy), r)
     pygame.draw.circle(surface, outline_color, (cx, cy), r, width=2)
@@ -64,17 +64,21 @@ def draw_mother(surface, mother, cell_px, mother_color, outline_color, label="M"
     # Label Mother
     font_size = int(r * 1.5)
     font = pygame.font.SysFont(None, font_size)
-    text_surface = font.render(label, True, [255,255,255])
+    text_surface = font.render(label, True, [255, 255, 255])
     text_rect = text_surface.get_rect(center=(cx, cy))
     surface.blit(text_surface, text_rect)
     
-    # Child Carried
+    # Child Indicator
     if mother.child is not None and mother.child.is_carried:
-        pygame.draw.circle(surface, (154, 205, 50), (cx, cy), r + 4, width= 4)
-        # pygame.draw.circle(surface, outline_color, (cx, cy), r + 4, width=1)
+        pygame.draw.circle(
+            surface, (0, 170, 230), (cx, cy), r + 4, width=2
+        )
 
-    if mother.pick_food:
-        pygame.draw.circle(surface, (0,0,0), (cx, cy), r + 3, width=4)
+    # Food Indicator
+    if mother.holding_food:
+        pygame.draw.circle(
+            surface, (230, 140, 40), (cx, cy), r + 8, width=2
+        )
 
 def draw_child(surface, child, cell_px, child_color, outline_color, label="C"):
     """Draw child agent"""
@@ -128,17 +132,6 @@ def draw_threat(surface, threat, cell_px, threat_color, outline_color, perceptio
     # # Draw perception range (dashed circle)
     perception_r = r + perception_range
     pygame.draw.circle(surface, outline_color, (cx, cy), int(perception_r), width=1)
-
-# def draw_nest(surface, nest, cell_px, nest_color, outline_color):
-#     """Draw nest entity"""
-#     # Draw nest as a 3x3 square
-#     pygame.draw.rect(surface, nest_color, ((nest.x-1) * cell_px, (nest.y-1) * cell_px, cell_px*3, cell_px*3))
-#     cx = nest.x * cell_px + cell_px // 2
-#     cy = nest.y * cell_px + cell_px // 2    
-#     r = cell_px 
-#     # Draw inner circle for nest pattern
-#     inner_r = r 
-#     pygame.draw.circle(surface, outline_color, (cx, cy), inner_r, width=1)
 
 def intensity_to_color(value, vmin=0, vmax=100):
     value = max(vmin, min(vmax, value))

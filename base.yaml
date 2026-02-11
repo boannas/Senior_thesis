@@ -2,7 +2,7 @@
 # World configuration file
 # ==================================================================================
 simulation:
-  dt: .1
+  dt: .5
   fps: 30   # Frames per second for rendering
   seed: 42  # Random seed for reproducibility
 
@@ -20,6 +20,7 @@ colors:
   threat: [200, 200, 200]      
   nest: [255, 193, 7]        
   outline: [120, 120, 120]    # [R, G, B] for entity outlines
+
 # ==================================================================================
 
 
@@ -190,6 +191,7 @@ mothers:
 children:
   starts:
     - [13, 13]   # C0 target
+    
 # Entity positions (Need to change in pygame_viewer.py to use this config)
 # food:
 #   positions:      # List of food positions

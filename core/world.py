@@ -48,140 +48,14 @@ class World:
         Advance world by one simulation timestep dt.
         """
         self.mother_decision()
-        self.threat_decision()
+        
+        # self.threat_decision()
         self.t += dt
         
 
 
 
 # ------------- Mother Decision ---------------
-    # def mother_decision(self):
-    #     perception_range = 100 
-    #     proposals = {}
-    #     occupied_now = {(m.x, m.y) for m in self.mothers}
-
-    #     # Entities and agent - Mother received (All)
-    #     mother_receive = self.foods + self.mothers + self.children + self.threats
-
-    #     for mother in self.mothers:
-    #         food_perceived, agents_perceived = mother.scan_perception(mother_receive, perception_range=perception_range)
-
-    #         if not food_perceived:
-    #             child = mother.child
-                
-    #             if child is not None:
-    #                 goal = (child.x, child.y)
-
-    #                 dx, dy = mother.step_towards(*goal)
-
-    #                 nx = max(0, min(self.grid_w - 1, mother.x + dx))
-    #                 ny = max(0, min(self.grid_h - 1, mother.y + dy))
-
-    #                 # if blocked right now, locally replan one step
-    #                 if (nx, ny) in occupied_now and (nx, ny) != (mother.x, mother.y):
-    #                     nx, ny = self.best_step(mother, goal, occupied_now)
-    #                     # print(mother.id , nx, ny)
-    #                     # print(mother)
-    #                 proposals[mother] = (nx, ny)
-
-    #                 if child is not None and abs(nx - child.x) + abs(ny - child.y) == 0:
-    #                     child.set_carried(True)
-    #             continue
-
-    #         food_perceived.sort(key=lambda t: t[1])
-
-    #         target_food = food_perceived[0][0]   # nearest food
-    #         goal = (target_food.x, target_food.y)
-    #         dx, dy = mother.step_towards(*goal)
-    #         nx = max(0, min(self.grid_w - 1, mother.x + dx))
-    #         ny = max(0, min(self.grid_h - 1, mother.y + dy))
-    #         # if blocked right now, locally replan one step
-    #         if (nx, ny) in occupied_now and (nx, ny) != (mother.x, mother.y):
-    #             nx, ny = self.best_step(mother, goal, occupied_now)
-
-    #         proposals[mother] = (nx, ny)
-
-
-    #         # Check if food is collected (distance == 0)
-    #         if abs(nx - target_food.x) + abs(ny - target_food.y) == 0 and not target_food.collected:
-    #             target_food.collect()
-
-
-    #     self.resolve_and_apply_moves(self.mothers, proposal
-    
-    # def mother_decision(self):
-    #     perception_range = 100
-    #     proposals = {}
-    #     occupied_now = {(m.x, m.y) for m in self.mothers}
-
-    #     mother_receive = self.foods + self.mothers + self.children + self.threats
-
-    #     for mother in self.mothers:
-    #         food_perceived, agents_perceived = mother.scan_perception(
-    #             mother_receive, perception_range=perception_range
-    #         )
-
-    #         # choose goal
-    #         goal = None
-    #         target_food = None
-
-    #         if food_perceived:
-    #             food_perceived.sort(key=lambda t: t[1])
-    #             target_food = food_perceived[0][0]
-    #             goal = (target_food.x, target_food.y)
-    #         else:
-    #             child = mother.child
-    #             if child is None:
-    #                 proposals[mother] = (mother.x, mother.y)
-    #                 continue
-    #             if child.is_carried:
-    #                 proposals[mother] = (mother.x, mother.y)
-    #                 child.x, child.y = mother.x, mother.y
-    #                 continue
-    #             goal = (child.x, child.y)
-
-    #         if goal is None:
-    #             # nx, ny = mother.x, mother.y
-    #             continue
-
-    #         # dynamic obstacles: other mothers (not self)
-    #         blocked = {(m.x, m.y) for m in self.mothers if m is not mother}
-
-    #         path = astar(
-    #             start=(mother.x, mother.y),
-    #             goal=goal,
-    #             grid_w=self.grid_w,
-    #             grid_h=self.grid_h,
-    #             blocked=blocked,
-    #             moves_8=True
-    #         )
-    #         print(path)
-    #         if path is None or len(path) < 2:
-    #             # fallback: your local best_step
-    #             nx, ny = self.best_step(mother, goal, occupied_now)
-    #         else:
-    #             nx, ny = path[1]  # next step
-
-    #             # if next step is occupied RIGHT NOW (rare due to blocked), fallback
-    #             if (nx, ny) in occupied_now and (nx, ny) != (mother.x, mother.y):
-    #                 nx, ny = self.best_step(mother, goal, occupied_now)
-
-    #         proposals[mother] = (nx, ny)
-    #         child = mother.child
-
-    #         # if reached food -> collect
-    #         if target_food is not None and (nx, ny) == (target_food.x, target_food.y) and not target_food.collected:
-    #             target_food.collect()
-
-    #         # if reached child -> carry
-    #         elif child is not None and (nx, ny) == (child.x, child.y) and not food_perceived:
-    #             child.set_carried(True)
-    #             # child.x, child.y = nx, ny
-
-            
-
-    #     self.resolve_and_apply_moves(self.mothers, proposals)
-
     def mother_decision(self):
         perception_range = 100
         proposals = {}
@@ -191,6 +65,7 @@ class World:
         # store intended target per mother (optional but helpful)
         intended_food = {}   # mother -> Food
         intended_child = set()
+        nx = ny = None
 
         for mother in self.mothers:
             food_perceived, _ = mother.scan_perception(mother_receive, perception_range=perception_range)
@@ -199,7 +74,7 @@ class World:
             target_food = None
             child = mother.child
 
-            if food_perceived and not mother.pick_food:
+            if food_perceived and not mother.holding_food:
                 food_perceived.sort(key=lambda t: t[1])
                 target_food = food_perceived[0][0]
                 goal = (target_food.x, target_food.y)
@@ -243,6 +118,11 @@ class World:
 
             proposals[mother] = (nx, ny)
 
+        if nx is not None and ny is not None :
+            moved = mother.x, mother.y == nx, ny
+        else :
+            moved = False
+        mother.update_physiology(moved=moved)
         # 1) apply moves
         self.resolve_and_apply_moves(self.mothers, proposals)
 
@@ -262,7 +142,134 @@ class World:
             # sync carried child position always
             if child is not None and child.is_carried:
                 child.x, child.y = mother.x, mother.y
-        # print(mother.n_foods)
+        print(mother.n_foods)
+
+
+# =============================================================================
+    def mother_decision(self):
+        perception_range = 100
+        proposals = {}
+        occupied_now = {(m.x, m.y) for m in self.mothers}
+        mother_receive = self.foods + self.mothers + self.children + self.threats
+
+        intended_food = {}     # mother -> Food
+        intended_child = set() # mothers intending to go to child (pickup/guard/deliver)
+
+        # store prev position for moved detection
+        prev_pos = {m: (m.x, m.y) for m in self.mothers}
+
+        for mother in self.mothers:
+            food_perceived, agents_perceived = mother.scan_perception(
+                mother_receive, perception_range=perception_range
+            )
+            mothers_seen, children_seen, threats_seen = agents_perceived
+
+            child = mother.child
+            goal = None
+            target_food = None
+
+            # 1) compute motivation
+            scores = mother.compute_scores(child=child, threats=threats_seen, foods=food_perceived)
+            mot = mother.select_motivation(scores)
+
+            print(mother.id, scores, mot)
+
+            # 2) map motivation -> goal
+            if mot == "FORAGE":
+                if food_perceived and not mother.holding_food:
+                    food_perceived.sort(key=lambda t: t[1])
+                    target_food = food_perceived[0][0]
+                    goal = (target_food.x, target_food.y)
+                    intended_food[mother] = target_food
+                else:
+                    # fallback: if already holding food, go to child to deliver
+                    if child is not None and child.is_alive() and not child.is_carried:
+                        goal = (child.x, child.y)
+                        intended_child.add(mother)
+
+            elif mot == "CARE":
+                if child is None or child.is_carried or (not child.is_alive()):
+                    proposals[mother] = (mother.x, mother.y)
+                    continue
+                goal = (child.x, child.y)
+                intended_child.add(mother)
+
+            elif mot == "SELF":
+                # simplest self-preservation: rest (stay)
+                proposals[mother] = (mother.x, mother.y)
+                continue
+
+            elif mot == "PROTECT":
+                # for now: "guard child" (later: intercept threat)
+                if child is not None and child.is_alive() and not child.is_carried:
+                    goal = (child.x, child.y)
+                    intended_child.add(mother)
+                else:
+                    proposals[mother] = (mother.x, mother.y)
+                    continue
+
+            # 3) if no goal, random move (your existing fallback)
+            if goal is None:
+                valid_moves = []
+                for dx, dy in self.RANDOM_MOVES:
+                    nx, ny = mother.x + dx, mother.y + dy
+                    if self.in_bounds(nx, ny):
+                        valid_moves.append((nx, ny))
+                proposals[mother] = random.choice(valid_moves) if valid_moves else (mother.x, mother.y)
+                continue
+
+            # 4) plan with A* (your existing)
+            blocked = {(m.x, m.y) for m in self.mothers if m is not mother}
+            blocked |= {(c.x, c.y) for c in self.children
+                        if (c is not mother.child) and (not c.is_carried)}
+
+            path = astar((mother.x, mother.y), goal, self.grid_w, self.grid_h, blocked, moves_8=True)
+
+            if path is None or len(path) < 2:
+                nx, ny = self.best_step(mother, goal, occupied_now)
+            else:
+                nx, ny = path[1]
+                if (nx, ny) in occupied_now and (nx, ny) != (mother.x, mother.y):
+                    nx, ny = self.best_step(mother, goal, occupied_now)
+
+            proposals[mother] = (nx, ny)
+
+        # 5) apply moves
+        self.resolve_and_apply_moves(self.mothers, proposals)
+
+        # 6) update physiology based on movement (per mother)
+        for mother in self.mothers:
+            moved = (prev_pos[mother] != (mother.x, mother.y))
+            mother.update_physiology(moved=moved, acted=False)
+
+        # 7) interactions (your existing, plus OPTIONAL food delivery)
+        for mother in self.mothers:
+            # food collect
+            f = intended_food.get(mother)
+            if f is not None and (mother.x, mother.y) == (f.x, f.y) and not f.collected:
+                f.collect()
+                mother.picking_food(True)
+                mother.update_physiology(moved=False, acted=True)
+
+            child = mother.child
+
+            # OPTIONAL: if mother is at child and holding food => feed / deliver
+            if child is not None and child.is_alive() and (mother.x, mother.y) == (child.x, child.y):
+                if mother.holding_food:
+                    # You need a hunger variable to make this meaningful.
+                    # If you don't have child.hunger yet, convert from distress for now.
+                    child.distress = max(0.0, child.distress - 30.0)
+                    mother.holding_food = False
+                    mother.update_physiology(moved=False, acted=True)
+
+            # child pickup (if you still want carry)
+            if mother in intended_child and child is not None and (mother.x, mother.y) == (child.x, child.y) and child.is_alive():
+                child.set_carried(True)
+
+            # sync carried child
+            if child is not None and child.is_carried:
+                child.x, child.y = mother.x, mother.y
+
 
     def resolve_and_apply_moves(self, agents, proposals):
         current = {a: (a.x, a.y) for a in agents}
@@ -319,71 +326,70 @@ class World:
             a.x, a.y = nx, ny
             occupied.add((nx, ny))
 
+    # def threat_decision(self):
+    #     perception_range = 2 
+    #     avoid_range = 2
+    #     proposals = {}
 
-    def threat_decision(self):
-        perception_range = 2 
-        avoid_range = 2
-        proposals = {}
+    #     # Entities and agent - Threat received (mother + child) not care other threats & food  
+    #     threat_receive = self.mothers + self.children
 
-        # Entities and agent - Threat received (mother + child) not care other threats & food  
-        threat_receive = self.mothers + self.children
+    #     for threat in self.threats:
+    #         _, agents_perceived = threat.scan_perception(threat_receive, perception_range)
+    #         mother_percieved = agents_perceived[0]
+    #         child_perceived = agents_perceived[1]
 
-        for threat in self.threats:
-            _, agents_perceived = threat.scan_perception(threat_receive, perception_range)
-            mother_percieved = agents_perceived[0]
-            child_perceived = agents_perceived[1]
+    #         # # # 1st priority: Afraid to mother agent (Moving away from mother)
+    #         # if mother_percieved:
+    #         #     mother_percieved.sort(key=lambda t:t[1])
+    #         #     closest_mother, m_dist = mother_percieved[0]
 
-            # # 1st priority: Afraid to mother agent (Moving away from mother)
-            if mother_percieved:
-                mother_percieved.sort(key=lambda t:t[1])
-                closest_mother, m_dist = mother_percieved[0]
+    #         #     if m_dist <= avoid_range:
+    #         #         best_moves = []
+    #         #         best_dist = -1
 
-                if m_dist <= avoid_range:
-                    best_moves = []
-                    best_dist = -1
+    #         #         for (dx, dy) in self.RANDOM_MOVES:
+    #         #             nx = max(0, min(self.grid_w - 1, threat.x + dx))
+    #         #             ny = max(0, min(self.grid_h - 1, threat.y + dy))
+    #         #             new_dist = abs(nx - closest_mother.x) + abs(ny - closest_mother.y)
 
-                    for (dx, dy) in self.RANDOM_MOVES:
-                        nx = max(0, min(self.grid_w - 1, threat.x + dx))
-                        ny = max(0, min(self.grid_h - 1, threat.y + dy))
-                        new_dist = abs(nx - closest_mother.x) + abs(ny - closest_mother.y)
+    #         #             if new_dist > best_dist:
+    #         #                 best_dist = new_dist
+    #         #                 best_moves = [(nx, ny)]
+    #         #             elif new_dist == best_dist:
+    #         #                 best_moves.append((nx, ny))
+    #         #         # print(best_moves)
 
-                        if new_dist > best_dist:
-                            best_dist = new_dist
-                            best_moves = [(nx, ny)]
-                        elif new_dist == best_dist:
-                            best_moves.append((nx, ny))
-                    # print(best_moves)
+    #         #         proposals[threat] = random.choice(best_moves)
+    #         #         # continue
 
-                    proposals[threat] = random.choice(best_moves)
-                    # continue
-
-            # 2nd priority: Child huntering (Moving closer to closest child)
-            elif child_perceived:
-                target_child, _ = child_perceived[0]
-                if not target_child.is_carried:
-                    dx, dy = threat.step_towards(target_child.x, target_child.y)
-                    nx = max(0, min(self.grid_w - 1, threat.x + dx))
-                    ny = max(0, min(self.grid_h - 1, threat.y + dy))
-                    proposals[threat] = (nx, ny)
+    #         # 2nd priority: Child huntering (Moving closer to closest child)
+    #         if child_perceived:
+    #             target_child, _ = child_perceived[0]
+    #             if not target_child.is_carried:
+    #                 dx, dy = threat.step_towards(target_child.x, target_child.y)
+    #                 nx = max(0, min(self.grid_w - 1, threat.x + dx))
+    #                 ny = max(0, min(self.grid_h - 1, threat.y + dy))
+    #                 proposals[threat] = (nx, ny)
                 
-                dist = abs(target_child.x - threat.x) + abs(target_child.y - threat.y)
-                # print([threat.x, threat.y], [target_child.x, target_child.y])
-                # print(target_child, target_child.energy, dist)
-                # Attack if on child
-                if dist == 0 and target_child.is_alive():
-                    target_child.energy -= random.randint(5, 10)
+    #             dist = abs(target_child.x - threat.x) + abs(target_child.y - threat.y)
+    #             # print([threat.x, threat.y], [target_child.x, target_child.y])
+    #             # print(target_child, target_child.energy, dist)
+    #             # Attack if on child
+    #             if dist == 0 and target_child.is_alive():
+    #                 target_child.energy -= random.randint(5, 10)
 
-            # last choice: Threat move randomly
-            else:
-                dx, dy = random.choice(self.RANDOM_MOVES)
-                nx = max(0, min(self.grid_w - 1, threat.x + dx))
-                ny = max(0, min(self.grid_h - 1, threat.y + dy))
-                proposals[threat] = (nx, ny)
-                # continue
+    #         # last choice: Threat move randomly
+    #         else:
+    #             dx, dy = random.choice(self.RANDOM_MOVES)
+    #             nx = max(0, min(self.grid_w - 1, threat.x + dx))
+    #             ny = max(0, min(self.grid_h - 1, threat.y + dy))
+    #             proposals[threat] = (nx, ny)
+    #             # continue
 
             
 
-        self.resolve_and_apply_moves(self.threats, proposals)
+    #     self.resolve_and_apply_moves(self.threats, proposals)
 
     def best_step(self, mother, goal_xy, occupied_now):
         gx, gy = goal_xy
