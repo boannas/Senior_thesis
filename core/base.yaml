@@ -2,7 +2,7 @@
 # World configuration file
 # ==================================================================================
 simulation:
-  dt: .5
+  dt: .1
   fps: 30   # Frames per second for rendering
   seed: 42  # Random seed for reproducibility
 

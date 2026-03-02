@@ -12,26 +12,11 @@ class Agent:
         self.agent_type = agent_type  # "mother" or "child"
 
         # --- Survival & Resources ---
-        self.hp = float(hp)          # survival
-        self.energy = float(energy)    # resource for actions
         self.age = 0.0              # agent age
 
-        # --- Physiological states ---
-        self.fatigue = 0.0
-        self.injury = 0.0
-        self.stress = 0.0
+        # Physiological states (Mother & Child)
+        self.energy = float(energy)    # resource for actions
 
-        # --- Hormone ---
-        self.OT = 0.0  # Oxytocin
-        self.CT = 0.0  # Cortisol
-
-        # --- Psychological states ---
-        self.bond_strength = 0.0
-        self.separation_distress = 0.0
-        self.risk_estimate = 0.0
-        self.attention_focus = "NONE"
-
-    
     def Manhattan_distance_to(self, other_x, other_y):
         """Calculate Manhattan distance to another position"""
         return abs(self.x - other_x) + abs(self.y - other_y)
@@ -102,8 +87,20 @@ class MotherAgent(Agent):
         self.id = mother_id
         self.child = None  # Reference to carried child agent
         self.holding_food = False
-        # self.motivations = ['Protect', 'Care', 'Forage', 'Self']
         self.current_motivation = ""
+
+        # Physiological states (Mother)
+        self.fatigue = 0.0
+
+        # Psychological states (Mother)
+        self.bond_strength = 0.0
+        self.fear = 0.0
+
+        # Neuroendocrine states (Mother)
+        self.OT = 0.0  # Oxytocin
+        self.CORT = 0.0  # Cortisol
+        # self.DA = 0.0   # Dopamine
+        # self.PT = 0.0   # Prolactin
 
     def set_child(self, child_agent):
         """Set the child agent being carried by mother"""
@@ -130,36 +127,36 @@ class MotherAgent(Agent):
         # print(self.energy, self.fatigue)
 
     
-    def compute_scores(self, child, threats, foods):
-        E_ideal = 100.0
-        energy_def = max(0.0, (E_ideal - self.energy) / E_ideal)   # 0..1
+    # def compute_scores(self, child, threats, foods):
+    #     E_ideal = 100.0
+    #     energy_def = max(0.0, (E_ideal - self.energy) / E_ideal)   # 0..1
 
-        # child need (recommend: use child.hunger; if not, use child.distress or energy proxy)
-        child_need = 0.0
-        if child is not None and child.is_alive() and (not child.is_carried):
-            # If you don't have hunger yet, use distress; otherwise use hunger.
-            # child_need = min(1.0, child.hunger / 100.0)
-            child_need = min(1.0, child.distress / 100.0)
+    #     # child need (recommend: use child.hunger; if not, use child.distress or energy proxy)
+    #     child_need = 0.0
+    #     if child is not None and child.is_alive() and (not child.is_carried):
+    #         # If you don't have hunger yet, use distress; otherwise use hunger.
+    #         # child_need = min(1.0, child.hunger / 100.0)
+    #         child_need = min(1.0, child.distress / 100.0)
 
-        # threat level (for now, you can keep 0 if you haven't implemented threat behavior)
-        threat_level = 0.0
-        for t in threats:
-            d = abs(t[0].x - self.x) + abs(t[0].y - self.y)
-            if d > 0:
-                threat_level = max(threat_level, 1.0 / d)
+    #     # threat level (for now, you can keep 0 if you haven't implemented threat behavior)
+    #     threat_level = 0.0
+    #     for t in threats:
+    #         d = abs(t[0].x - self.x) + abs(t[0].y - self.y)
+    #         if d > 0:
+    #             threat_level = max(threat_level, 1.0 / d)
 
-        # self risk
-        fatigue = 0.0 if self.fatigue is None else self.fatigue
-        injury  = 0.0 if self.injury is None else self.injury
-        self_risk = min(1.0, (fatigue / 100.0) + (injury / 100.0))
+    #     # self risk
+    #     fatigue = 0.0 if self.fatigue is None else self.fatigue
+    #     injury  = 0.0 if self.injury is None else self.injury
+    #     self_risk = min(1.0, (fatigue / 100.0) + (injury / 100.0))
 
-        # scores (tune weights later)
-        M_care   = 2.0 * child_need + 1.0 * (self.bond_strength or 0.0) - 0.5 * energy_def
-        M_forage = 2.0 * energy_def - 1.5 * threat_level
-        M_self   = 3.0 * self_risk + 1.0 * energy_def
-        M_prot   = 3.0 * threat_level + 1.0 * (self.bond_strength or 0.0) - 2.0 * self_risk
+    #     # scores (tune weights later)
+    #     M_care   = 2.0 * child_need + 1.0 * (self.bond_strength or 0.0) - 0.5 * energy_def
+    #     M_forage = 2.0 * energy_def - 1.5 * threat_level
+    #     M_self   = 3.0 * self_risk + 1.0 * energy_def
+    #     M_prot   = 3.0 * threat_level + 1.0 * (self.bond_strength or 0.0) - 2.0 * self_risk
 
-        return {"CARE": M_care, "FORAGE": M_forage, "SELF": M_self, "PROTECT": M_prot}
+    #     return {"CARE": M_care, "FORAGE": M_forage, "SELF": M_self, "PROTECT": M_prot}
 
     def select_motivation(self, scores, margin=0.15):
         best = max(scores, key=scores.get)

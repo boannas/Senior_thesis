@@ -1,26 +1,20 @@
-
 import pygame
 import sys
 from pathlib import Path
 import random
-import numpy as np
 
 # Add parent directory to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.world import World
-from func.function_code import (
-    load_config, draw_grid, draw_mother, draw_child, 
-    draw_food, draw_threat, intensity_to_color, random_unique_positions
-)
-
+from core.ui.pygame_render import draw_grid, draw_mother, draw_child, draw_food, draw_threat, intensity_to_color
+from core.config.config import load_config, random_unique_positions
 
 def main(threat_positions=None):
 
     # Load configuration
     config_path = Path(__file__).parent.parent / "base.yaml"
     cfg = load_config(str(config_path))
-    
     # Extract configuration
     grid_w = cfg["grid"]["width"]
     grid_h = cfg["grid"]["height"]
@@ -43,7 +37,7 @@ def main(threat_positions=None):
     )
 
     threat_starts, occupied = random_unique_positions(
-        n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=2, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
     # Entity positions
     # food_positions = cfg["food"].get("positions", [])
