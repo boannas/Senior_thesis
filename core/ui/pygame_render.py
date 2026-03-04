@@ -65,6 +65,7 @@ def draw_food(surface, food, cell_px, food_color, outline_color):
         return  # Don't draw collected food
     cx = food.x * cell_px + cell_px // 2
     cy = food.y * cell_px + cell_px // 2
+    
     # Draw food as a small square
     size = cell_px // 2
     rect = pygame.Rect(cx - size // 2, cy - size // 2, size, size)
@@ -75,7 +76,8 @@ def draw_threat(surface, threat, cell_px, threat_color, outline_color, perceptio
     """Draw threat entity"""
     cx = threat.x * cell_px + cell_px // 2
     cy = threat.y * cell_px + cell_px // 2
-    # Draw threat as a triangle (warning symbol)
+
+    # Draw threat as a triangle
     r = cell_px // 3
     points = [
         (cx, cy - r),  # Top
@@ -88,6 +90,18 @@ def draw_threat(surface, threat, cell_px, threat_color, outline_color, perceptio
     # # Draw perception range (dashed circle)
     perception_r = r + perception_range
     pygame.draw.circle(surface, outline_color, (cx, cy), int(perception_r), width=1)
+
+    # if getattr(threat, 'patrol_goal', None) is not None:
+    #     gx, gy = threat.patrol_goal
+
+    #     tx = gx * cell_px + cell_px // 2
+    #     ty = gy * cell_px + cell_px // 2
+
+    #     size = cell_px // 4
+
+    #     # draw cross marker
+    #     pygame.draw.line(surface, outline_color, (tx-size, ty), (tx+size, ty), 2)
+    #     pygame.draw.line(surface, outline_color, (tx, ty-size), (tx, ty+size), 2)
 
 def intensity_to_color(value, vmin=0, vmax=100):
     value = max(vmin, min(vmax, value))

@@ -23,11 +23,11 @@ class World:
 
         # Create mother agents
         for i, (mx, my) in enumerate(mother_starts):
-            self.mothers.append(MotherAgent(mx, my, grid_w, grid_h, hp=100, energy=100, mother_id=f"M{i}"))
+            self.mothers.append(MotherAgent(mx, my, grid_w, grid_h, energy=100.0, mother_id=f"M{i}"))
 
         # Create child agents
         for i, (cx, cy) in enumerate(child_start):
-            self.children.append(ChildAgent(cx, cy, grid_w, grid_h, hp=50, energy=50, child_id=f"C{i}"))
+            self.children.append(ChildAgent(cx, cy, grid_w, grid_h, energy=10.0, child_id=f"C{i}"))
 
         # Link mothers and children (now with like with index)
         for m, c in zip(self.mothers, self.children):
@@ -42,9 +42,21 @@ class World:
 
         # Create Threat
         for i, (cx, cy) in enumerate(threat_starts):
-            self.threats.append(ThreatAgent(cx, cy, grid_w, grid_h, hp=50, energy=50))
+            self.threats.append(ThreatAgent(cx, cy, grid_w, grid_h, energy=50))
 
     def step(self, dt: float = 0.1):
+
+        # Internal dynamics before decision 
+        for c in self.children:
+            # print(c.id)
+            pass
+            # c.update(self)
+        
+
+        for m in self.mothers:
+            m.update_psych_neuro(self)
+            # print(m.id)
+        
         m_prop, m_int = mother_policy_propose(self)
         t_prop, t_int = threat_policy_propose(self)
 
