@@ -9,6 +9,8 @@ def draw_grid(surface, grid_w, grid_h, cell_px, bg, grid_color, outline):
         pygame.draw.line(surface, grid_color, (0, y * cell_px), (grid_w * cell_px, y * cell_px))
 
 def draw_mother(surface, mother, cell_px, mother_color, outline_color, label="M"):
+    if not mother.is_alive():
+        return
     """Draw mother agent"""
     cx = mother.x * cell_px + cell_px // 2
     cy = mother.y * cell_px + cell_px // 2
@@ -25,7 +27,7 @@ def draw_mother(surface, mother, cell_px, mother_color, outline_color, label="M"
     surface.blit(text_surface, text_rect)
     
     # Child Indicator
-    if mother.child is not None and mother.child.is_carried:
+    if mother.child is not None and mother.child.is_carried and mother.child.alive:
         pygame.draw.circle(
             surface, (0, 170, 230), (cx, cy), r + 4, width=2
         )
@@ -91,17 +93,17 @@ def draw_threat(surface, threat, cell_px, threat_color, outline_color, perceptio
     perception_r = r + perception_range
     pygame.draw.circle(surface, outline_color, (cx, cy), int(perception_r), width=1)
 
-    # if getattr(threat, 'patrol_goal', None) is not None:
-    #     gx, gy = threat.patrol_goal
+    if getattr(threat, 'patrol_goal', None) is not None:
+        gx, gy = threat.patrol_goal
 
-    #     tx = gx * cell_px + cell_px // 2
-    #     ty = gy * cell_px + cell_px // 2
+        tx = gx * cell_px + cell_px // 2
+        ty = gy * cell_px + cell_px // 2
 
-    #     size = cell_px // 4
+        size = cell_px // 4
 
-    #     # draw cross marker
-    #     pygame.draw.line(surface, outline_color, (tx-size, ty), (tx+size, ty), 2)
-    #     pygame.draw.line(surface, outline_color, (tx, ty-size), (tx, ty+size), 2)
+        # draw cross marker
+        pygame.draw.line(surface, outline_color, (tx-size, ty), (tx+size, ty), 2)
+        pygame.draw.line(surface, outline_color, (tx, ty-size), (tx, ty+size), 2)
 
 def intensity_to_color(value, vmin=0, vmax=100):
     value = max(vmin, min(vmax, value))
@@ -118,3 +120,20 @@ def intensity_to_color(value, vmin=0, vmax=100):
         b = int(255 * ((t - 0.5) / 0.5))
     return (r, g, b)
 
+
+
+def get_clock_time(time_of_day, day_length):
+    total_minutes = (time_of_day / day_length) * 24 * 60
+    hours = int(total_minutes // 60) % 24
+    minutes = int(total_minutes % 60)
+    return hours, minutes
+
+def draw_clock_text(screen, world):
+    font = pygame.font.SysFont(None, 14)
+
+    hours, minutes = get_clock_time(world.time_of_day, world.day_step)
+    phase = "Day" if world.is_day else "Night"
+
+    text = f"Day {world.day_count} | {hours:02d}:{minutes:02d} | {phase}"
+    surf = font.render(text, True, (0, 0, 255))
+    screen.blit(surf, (10, 10))

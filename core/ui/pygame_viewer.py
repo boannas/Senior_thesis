@@ -2,26 +2,37 @@ import pygame
 import sys
 from pathlib import Path
 import random
+import os 
 
 # Add parent directory to path to import modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.world import World
-from core.ui.pygame_render import draw_grid, draw_mother, draw_child, draw_food, draw_threat, intensity_to_color
+from core.ui.pygame_render import (
+    draw_grid, draw_mother, draw_child, 
+    draw_food, draw_threat, intensity_to_color,
+    draw_clock_text
+)
 from core.config.config import load_config, random_unique_positions
+# from core.entities import Food
+from func.live_plot import MotherStatePlotter
 
-def main(threat_positions=None):
+
+
+def main():
 
     # Load configuration
     config_path = Path(__file__).parent.parent / "base.yaml"
     cfg = load_config(str(config_path))
     # Extract configuration
     grid_w = cfg["grid"]["width"]
-    grid_h = cfg["grid"]["height"]
+    grid_h = cfg["grid"]["height"] 
     cell_px = cfg["grid"]["cell_px"]
     fps = cfg["simulation"]["fps"]
     dt = cfg["simulation"]["dt"]
     seed = cfg["simulation"]["seed"]
+    day_step = cfg["days"]["ticks_per_day"]
+
 
     random.seed(seed)   # Fixed seed for reproducibility
     occupied = set()
@@ -37,7 +48,7 @@ def main(threat_positions=None):
     )
 
     threat_starts, occupied = random_unique_positions(
-        n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=1 , grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
     # Entity positions
     # food_positions = cfg["food"].get("positions", [])
@@ -55,8 +66,10 @@ def main(threat_positions=None):
     outline_color = tuple(cfg["colors"]["outline"])
     
     # Initialize pygame
+    os.environ["SDL_VIDEO_WINDOW_POS"] = "50,50"
     pygame.init()
-    
+
+
     # Calculate window size
     window_w = grid_w * cell_px
     window_h = grid_h * cell_px
@@ -71,11 +84,15 @@ def main(threat_positions=None):
         child_start=child_starts,
         food_positions=food_positions,
         threat_starts=threat_starts,
+        day_step=day_step
     )
-    
+    plotter = MotherStatePlotter(world)
+
     # Main game loop
     running = True
     accumulator = 0.0
+    time = 0.0
+
 
     # ==============================================
     # ------------- Main Update Loop ---------------
@@ -95,7 +112,10 @@ def main(threat_positions=None):
         while accumulator >= dt:
             accumulator -= dt
             world.step(dt)
+            if world.tick % 10 == 0:
+                plotter.update()
 
+        
         # ==============================================
         # ------------- Rendering ----------------
         # ==============================================
@@ -112,14 +132,14 @@ def main(threat_positions=None):
 
         # Draw child (on top)
         for i, c in enumerate(world.children):
-            # c.distress += np.random.uniform(1, 3)           # dynamic distress testing
             color = intensity_to_color(c.energy)
             draw_child(screen, c, cell_px, color, outline_color, label=f"C{i}")
 
         # Draw threat
         for i, t in enumerate(world.threats):
-            percept_range = cell_px * 2
+            percept_range = cell_px * t.perception_range
             draw_threat(screen, t, cell_px, threat_colot, outline_color, perception_range=percept_range)
+        draw_clock_text(screen, world)
         # Update display
         pygame.display.flip()
         clock.tick(fps)
