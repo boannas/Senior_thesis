@@ -27,7 +27,6 @@ def mother_policy_propose(world):
         child = mother.child
 
         # ----- Select motivation -----
-        # if food_perceived and not mother.holding_food:
         if food_perceived:
             # Find food
             food_perceived.sort(key=lambda t: t[1])
@@ -44,8 +43,8 @@ def mother_policy_propose(world):
             #     intended_child.add(mother)
             pass
 
-        motivation_compute(mother)
-        select_motivation(mother=mother)
+        # motivation_compute(mother)
+        # select_motivation(mother=mother)
 
 
         
@@ -60,7 +59,6 @@ def mother_policy_propose(world):
                     valid_moves.append((nx, ny))
             # proposals[mother] = random.choice(valid_moves) if valid_moves else (mother.x, mother.y)
             proposals[mother] = (mother.x, mother.y)
-            # print(proposals[mother])
             continue
 
         blocked = {(m.x, m.y) for m in world.mothers if m is not mother}
@@ -118,9 +116,8 @@ def apply_mother_intents(world, intents):
 def motivation_compute(mother):
     u_1 = [1, 1, 1]     # Foraging
     u_2 = [1, 1, 1]     # Care 
-    u_3 = [1.0, 1.0]    # Self-Preservation
-    u_4 = [1,1,1,1]     # Protect
-
+    u_3 = [1, 1, 1]    # Self-Preservation
+    u_4 = [1, 1, 1, 1]     # Protect
 
     # Mother attr.
     m_energy_def = deficit_low(mother.energy, IDEAL_VALUE['M_energy'])
@@ -128,6 +125,7 @@ def motivation_compute(mother):
     m_bonding = mother.bonding
     m_closeness_def = deficit_abs(mother.closeness_child, IDEAL_VALUE['M_closeness'])
     m_fatigue = mother.fatigue
+    m_stress = mother.stress
 
     if mother.child is not None:
         child = mother.child
@@ -142,8 +140,6 @@ def motivation_compute(mother):
         c_warmth_def = 0
         m_closeness_def = 0
         c_injury_def = 0
-
-
 
     # Compute Motivation
     M_forage = (
@@ -162,7 +158,8 @@ def motivation_compute(mother):
     M_self = (
         u_3[0] * m_fatigue +
         # u_3[1] * m_energy_def
-        u_3[1] * m_fear
+        u_3[1] * m_fear +
+        u_3[2] * m_stress
     )
 
     M_protect = (
@@ -171,15 +168,6 @@ def motivation_compute(mother):
         u_4[2] * m_closeness_def +
         u_4[3] * m_bonding
     )
-
-    motivation_names = ["forage", "care", "self", "protect"]
-    motivation_arr = [M_forage, M_Care, M_self, M_protect]
-
-    print(f"M_forage: {M_forage}\n",
-          f"M_care: {M_Care}\n",
-          f"M_self: {M_self}\n"
-          f"M_protect: {M_protect}\n"
-          )
     
     mother.motivations['Forage'] = M_forage
     mother.motivations['Care'] = M_Care
@@ -187,18 +175,7 @@ def motivation_compute(mother):
     mother.motivations['Protect'] = M_protect
 
 
-
-# def select_motivation(mother):
-#     for k, v in mother.motivations.items():
-#         print(f"{k}: {v:.2f}")
-        
-#     mot_idx = np.argmax(motivation_arr)
-#     print('Selected motivation: ', motivation_names[mot_idx])
-
-
 def select_motivation(mother):
-
-    # print motivations
     for k, v in mother.motivations.items():
         print(f"{k}: {v:.2f}")
 
@@ -206,9 +183,7 @@ def select_motivation(mother):
     motivation_values = list(mother.motivations.values())
 
     mot_idx = np.argmax(motivation_values)
-
     selected = motivation_names[mot_idx]
-
-    print(f"Selected motivation: {selected} ({motivation_values[mot_idx]:.2f})")
+    print(f"Selected motivation: {selected} ({motivation_values[mot_idx]:.2f})\n")
 
     return selected

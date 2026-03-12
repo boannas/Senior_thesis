@@ -78,12 +78,12 @@ class World:
         # Internal dynamics before decision 
         for c in self.children:
             # c.print_state()
-            c.update()
+            c.update(self)
             # print(c.id, c.energy, c.alive)
             pass 
 
         for m in self.mothers:
-            m.update_psych_neuro(self)
+            # m.update_psych_neuro(self)
             # print(m.id, m.energy, m.alive)
 
             # m.print_state()
@@ -91,6 +91,9 @@ class World:
 
         for t in self.threats:
             # t.print_state()
+            t.energy -= 5
+            if not t.is_alive():
+                self.threats.remove(t)
             pass
         
 

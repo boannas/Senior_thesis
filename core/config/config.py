@@ -3,7 +3,14 @@ from pathlib import Path
 import random
 
 def load_config(path: str) -> dict:
-    # sensible defaults (used if yaml omits a field)
+    """
+    Load configuration from a YAML file and merge it with defaults.
+
+    If the file does not exist, return the default configuration.
+    User-provided values override defaults, including nested dictionaries.
+    """
+
+    # Default configuration values (if no YAML file)
     cfg = {
         "seed": 42,
         "fps": 30,
@@ -24,24 +31,51 @@ def load_config(path: str) -> dict:
             "outline": [120, 120, 120],
         },
     }
+
+    # Load YAML if the given path exists and is a file
     if path and Path(path).is_file():
         with open(path, "r", encoding="utf-8") as f:
             user = yaml.safe_load(f) or {}
+
         # Deep merge for nested dictionaries
         def deep_merge(base, update):
+            """
+            Recursively merge 'update' into 'base'.
+            Nested dictionaries are merged instead of replaced completely.
+            """
             for key, value in update.items():
                 if key in base and isinstance(base[key], dict) and isinstance(value, dict):
                     deep_merge(base[key], value)
                 else:
                     base[key] = value
+
         deep_merge(cfg, user)
+    
     return cfg
 
 
 
 def random_unique_positions(n, grid_w, grid_h, occupied=None):
     """
-    Generate n unique positions on a grid, avoiding occupied cells.
+    Generate n unique random positions on a grid.
+
+    Parameters
+    ----------
+    n : int
+        Number of positions to generate.
+    grid_w : int
+        Grid width.
+    grid_h : int
+        Grid height.
+    occupied : set of tuple, optional
+        Positions already in use, e.g. {(1, 2), (3, 4)}.
+
+    Returns
+    -------
+    chosen_positions : list of [x, y]
+        Randomly selected free positions.
+    occupied : set of tuple
+        Updated occupied positions including the newly chosen cells.
     """
     if occupied is None:
         occupied = set()

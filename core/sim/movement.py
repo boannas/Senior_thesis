@@ -54,11 +54,7 @@ def resolve_and_apply_moves(agents, proposals, grid_w, grid_h):
     #     return v
 
     def prio(a):
-        """
-        Return a comparable priority key for deterministic tie-breaking.
-        Always returns a tuple of ints/strings so comparisons never mix int vs str.
-        Lower key = higher priority.
-        """
+
         # Prefer explicit IDs (mother_id/child_id/id)
         v = getattr(a, "id", None)
         if v is None:

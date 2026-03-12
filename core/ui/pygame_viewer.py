@@ -14,10 +14,7 @@ from core.ui.pygame_render import (
     draw_clock_text
 )
 from core.config.config import load_config, random_unique_positions
-# from core.entities import Food
 from func.live_plot import MotherStatePlotter
-
-
 
 def main():
 
@@ -56,7 +53,6 @@ def main():
         n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
 
-    # print("food_positions:", food_positions)
     # Colors
     bg_color = tuple(cfg["colors"]["bg"])
     grid_color = tuple(cfg["colors"]["grid"])
@@ -126,11 +122,11 @@ def main():
         for food in world.foods:
             draw_food(screen, food, cell_px, food_color, outline_color)
         
-        # Draw mother (on top)
+        # Draw mother 
         for i, m in enumerate(world.mothers):
             draw_mother(screen, m, cell_px, mother_color, outline_color, label=f"M{i}")
 
-        # Draw child (on top)
+        # Draw child 
         for i, c in enumerate(world.children):
             color = intensity_to_color(c.energy)
             draw_child(screen, c, cell_px, color, outline_color, label=f"C{i}")
@@ -140,6 +136,7 @@ def main():
             percept_range = cell_px * t.perception_range
             draw_threat(screen, t, cell_px, threat_colot, outline_color, perception_range=percept_range)
         draw_clock_text(screen, world)
+
         # Update display
         pygame.display.flip()
         clock.tick(fps)

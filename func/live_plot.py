@@ -7,11 +7,11 @@ class MotherStatePlotter:
 
         self.state_names = [
             "energy",
-            # "fatigue",
-            # "bonding",
+            "fatigue",
+            "bonding",
             "fear_threat",
             "stress",
-            # "closeness_child",
+            "closeness_child",
             "OT",
             "CORT",
         ]

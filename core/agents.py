@@ -13,7 +13,7 @@ class Agent:
 
         # --- Survival & Resources ---
         self.age = 0.0              # agent age
-        self.energy = energy
+        self.energy = energy        
         self.alive = True
 
     def is_alive(self):
@@ -90,7 +90,7 @@ class Agent:
         return (dx, dy)
 
 class MotherAgent(Agent):
-    """Mother agent - can move and interact with child, food, threats, and nest"""
+    """Mother agent - can move and interact with child, food, threats"""
     def __init__(self, x, y, grid_w, grid_h, energy, mother_id=None):
         super().__init__(x, y, grid_w, grid_h, energy, agent_type="mother")
         self.id = mother_id
@@ -170,19 +170,19 @@ class MotherAgent(Agent):
             self.alive = False
             return
 
-
         # Child Signal
         child_need = 0.0
         energy_def = (deficit_low(self.energy, IDEAL_VALUE['M_energy']))
 
-
         # Adjustable weights
-        w_1 = [0.33, 0.33, 0.33]        # Weight for child need
-        w_2 = [0.1, 0.01]   # OT rise
+        w_1 = [0.33, 0.33, 0.33]  # Child need
+        w_2 = [0.1, 0.01]   # OT
         w_3 = [0.01, 0.02]  # Bonding
         w_4 = [0.1, 0.1, 0.05, 0.01]    # CORT
+        w_5 = [1, 1, 1, 1]  # Stress
 
         if self.child is not None and self.child.is_alive():
+
             # higher when child hunger high or warmth far from ideal or injury high
             child_need = (
                 w_1[0] * (self.child.hunger ) +
@@ -190,12 +190,9 @@ class MotherAgent(Agent):
                 w_1[2] * (self.child.injury )
             ) 
 
-            # print(child_need)
-
             # closeness 100 when same cell, 0 when far
             dchild = self.distance_to(self.child.x, self.child.y, metric='octile')
             norm_dist = dchild / max(world.grid_w, world.grid_h)
-            # print(child_need)
             self.closeness_child = max(0.0, 100.0 * (1.0 - norm_dist))
 
             # OT
@@ -203,29 +200,22 @@ class MotherAgent(Agent):
             if self.closeness_child >= 90:  # distance to child <= xx % 
                 ot_increase = w_2[0] * self.closeness_child
                 self.OT = max(0.0, min(100.0, self.OT + ot_increase))
-
             else :
                 ot_decay = w_2[1] * self.OT 
                 self.OT = max(0.0, min(100.0, self.OT - ot_decay))
 
-
             # Bonding 
             # OT strengthens bond; unmet need reduce it slightly
             self.bonding = max(0.0, min(100.0, self.bonding + w_3[0] * self.OT - w_3[1] * child_need))
-            # print(self.OT , child_need)
 
-
-
-            # Threat proximity
+            # Threat proximity (reference with child)
             threat_near = 0.0
             threat_radius = 10.0
             
             for t in world.threats:
                 d = self.child.distance_to(t.x, t.y, metric='octile')
-                # d = self.distance_to(t.x, t.y, metric='octile')
                 if d <= threat_radius: 
                     threat_near = max(threat_near, (threat_radius-d)/threat_radius)
-                # print(threat_near)
             
             # CORT 
             cort_increase = (
@@ -234,7 +224,7 @@ class MotherAgent(Agent):
                 w_4[2] * energy_def
                 )
             
-            # # Fear 
+            # Fear 
             self.fear_threat = max(0.0, min(100.0, self.fear_threat + threat_near))
 
         # Child Dead T_T
@@ -247,13 +237,12 @@ class MotherAgent(Agent):
             cort_increase = (w_4[2] * energy_def)
         cort_reduce = w_4[3] * self.CORT
         self.CORT = max(0.0, min(100.0, self.CORT + cort_increase - cort_reduce))
-        # print(energy_def, cort_increase)
 
-
-        # self.stress = max(0.0, min(100.0, self.stress + (child_need + energy_def) + threat_near))
-
-
-        # self.print_state()
+        self.stress = max(0.0, min(100.0,
+            w_5[0] * self.CORT +
+            w_5[1] * self.fear_threat +
+            w_5[2] * child_need
+            ))
 
     def print_state(self):
 
@@ -292,8 +281,14 @@ class ChildAgent(Agent):
         self.hunger = 0.0       # 0:full, 100:starving
         self.warmth = 50.0       # 0:freezing, 100:overheat 
         self.injury = 0.0       # 0:none, 100:lethat
-        self.health = 100.0
         self.alive = True
+
+        self.threat_recovery_radius = 5.0
+        self.injury_recovery_rate = 0.1
+        self.warmth_recovery_rate = 0.1
+
+        self.threat_close = False
+        self.nearest_threat_dist = float("inf")
 
     
     def is_alive(self): # Overide is alive
@@ -316,7 +311,7 @@ class ChildAgent(Agent):
         """Set whether the child is being carried by mother"""
         self.is_carried = carried
 
-    def update(self):
+    def update(self, world):
         if not self.is_alive():
             self.alive = False
             return
@@ -325,18 +320,27 @@ class ChildAgent(Agent):
         self.hunger = min(100.0, self.hunger + 1.0)
 
         if self.is_carried:
-            self.warmth = min(50.0, self.warmth + 0.1) 
+            self.warmth = min(50.0, self.warmth + self.warmth_recovery_rate) 
         else:
             # Warmth increase over time (North Polar ?)
             self.warmth = max(0.0, self.warmth - 0.5)
 
-        # Injury : recover over time
-        # self.injury = max(0.0, self.injury - 0.1)
+        # Injury: recover over time
+        for t in world.threats:
+            d = self.distance_to(t.x, t.y, metric="octile")
+            self.nearest_threat_dist = min(self.nearest_threat_dist, d)
+            if d <= self.threat_recovery_radius:
+                self.threat_close = True
+            
+        # Recovery only when threats are not close
+        if not self.threat_close:
+            self.injury = max(0.0, self.injury - self.injury_recovery_rate)
 
         # Check Death after update states
         if not self.is_alive():
             self.alive = False
-        # self.print_state()
+
+        self.print_state()
 
     def print_state(self):
 
@@ -360,12 +364,9 @@ class ThreatAgent(Agent):
         self.patrol_goal = None
         self.patrol_timer = 0
         self.perception_range = 2
-
-    # def update(self):
-    #     pass
+        self.energy = 100.0
 
     def print_state(self):
-
         print(f"\n[THREAT {self.id}]")
         print("Position:", (self.x, self.y))
         print("Energy:", self.energy)

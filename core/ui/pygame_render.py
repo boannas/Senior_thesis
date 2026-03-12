@@ -120,8 +120,6 @@ def intensity_to_color(value, vmin=0, vmax=100):
         b = int(255 * ((t - 0.5) / 0.5))
     return (r, g, b)
 
-
-
 def get_clock_time(time_of_day, day_length):
     total_minutes = (time_of_day / day_length) * 24 * 60
     hours = int(total_minutes // 60) % 24
