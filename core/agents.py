@@ -1,6 +1,20 @@
 import math
 from core.entities import Food
 from core.policies.deficit import IDEAL_VALUE, deficit_low
+import numpy as np
+# Adjustable weights
+# w_1 = [0.33, 0.33, 0.33]  # Child need
+# w_2 = [0.1, 0.01]   # OT
+# w_3 = [0.01, 0.02]  # Bonding
+# w_4 = [0.1, 0.1, 0.05, 0.01]    # CORT
+# w_5 = [1, 1, 1, 1]  # Stress
+
+np.random.seed(42)
+w_1 = np.random.uniform(0, 1, 3)
+w_2 = np.random.uniform(0 ,1, 2)
+w_3 = np.random.uniform(0 ,1, 2)
+w_4 = np.random.uniform(0 ,1, 4)
+w_5 = np.random.uniform(0 ,1, 4)
 
 class Agent:
     """Base class for agents (mother and child)"""
@@ -98,11 +112,11 @@ class MotherAgent(Agent):
         self.holding_food = False
         self.holding_child = False
         self.alive = True
+        self.food_inventory = 0
 
         # Physiological states
         self.energy = energy
         self.fatigue = 0.0
-        # self.injury = 0.0       # may not use
 
         # Psychological states
         self.bonding = 100.00
@@ -121,6 +135,7 @@ class MotherAgent(Agent):
             "Self":     0.0, 
             "Protect":  0.0
         }
+
 
     def is_alive(self):
         if not self.alive:
@@ -173,13 +188,6 @@ class MotherAgent(Agent):
         # Child Signal
         child_need = 0.0
         energy_def = (deficit_low(self.energy, IDEAL_VALUE['M_energy']))
-
-        # Adjustable weights
-        w_1 = [0.33, 0.33, 0.33]  # Child need
-        w_2 = [0.1, 0.01]   # OT
-        w_3 = [0.01, 0.02]  # Bonding
-        w_4 = [0.1, 0.1, 0.05, 0.01]    # CORT
-        w_5 = [1, 1, 1, 1]  # Stress
 
         if self.child is not None and self.child.is_alive():
 

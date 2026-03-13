@@ -78,7 +78,7 @@ class World:
         # Internal dynamics before decision 
         for c in self.children:
             # c.print_state()
-            c.update(self)
+            # c.update(self)
             # print(c.id, c.energy, c.alive)
             pass 
 
@@ -91,9 +91,9 @@ class World:
 
         for t in self.threats:
             # t.print_state()
-            t.energy -= 5
-            if not t.is_alive():
-                self.threats.remove(t)
+            # t.energy -= 5
+            # if not t.is_alive():
+            #     self.threats.remove(t)
             pass
         
 

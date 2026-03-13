@@ -45,7 +45,7 @@ def main():
     )
 
     threat_starts, occupied = random_unique_positions(
-        n=1 , grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=0 , grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
     # Entity positions
     # food_positions = cfg["food"].get("positions", [])
