@@ -38,6 +38,13 @@ def draw_mother(surface, mother, cell_px, mother_color, outline_color, label="M"
             surface, (230, 140, 40), (cx, cy), r + 8, width=2
         )
 
+    if mother.food_inventory > 0:
+        pygame.draw.circle(
+            surface, (230, 140, 40), (cx, cy), r + 8, width=2
+        )
+
+    
+
 def draw_child(surface, child, cell_px, child_color, outline_color, label="C"):
     """Draw child agent"""
 
@@ -57,7 +64,7 @@ def draw_child(surface, child, cell_px, child_color, outline_color, label="C"):
     # Label Child
     font_size = int(r * 1.5)
     font = pygame.font.SysFont(None, font_size)
-    text_surface = font.render(label, True, [255,255,255])
+    text_surface = font.render(label, True, [0,0,0])
     text_rect = text_surface.get_rect(center=(cx, cy))
     surface.blit(text_surface, text_rect)
 

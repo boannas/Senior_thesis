@@ -14,7 +14,12 @@ from core.ui.pygame_render import (
     draw_clock_text
 )
 from core.config.config import load_config, random_unique_positions
-from func.live_plot import MotherStatePlotter
+from func.live_plot import MotherStatePlotter, MotherMotivationPlotter, ChildStatePlotter
+import random
+import numpy as np
+
+random.seed(42)
+np.random.seed(42)
 
 def main():
 
@@ -45,7 +50,7 @@ def main():
     )
 
     threat_starts, occupied = random_unique_positions(
-        n=0 , grid_w=grid_w, grid_h=grid_h, occupied=occupied
+        n=1 , grid_w=grid_w, grid_h=grid_h, occupied=occupied
     )
     # Entity positions
     # food_positions = cfg["food"].get("positions", [])
@@ -62,7 +67,7 @@ def main():
     outline_color = tuple(cfg["colors"]["outline"])
     
     # Initialize pygame
-    os.environ["SDL_VIDEO_WINDOW_POS"] = "50,50"
+    os.environ["SDL_VIDEO_WINDOW_POS"] = "900,630"
     pygame.init()
 
 
@@ -83,6 +88,9 @@ def main():
         day_step=day_step
     )
     plotter = MotherStatePlotter(world)
+    # mot_plotter = MotherMotivationPlotter(world)
+    child_plotter = ChildStatePlotter(world)
+    
 
     # Main game loop
     running = True
@@ -108,8 +116,10 @@ def main():
         while accumulator >= dt:
             accumulator -= dt
             world.step(dt)
-            if world.tick % 10 == 0:
+            if world.tick % 1 == 0:
                 plotter.update()
+                # mot_plotter.update()
+                child_plotter.update()
 
         
         # ==============================================

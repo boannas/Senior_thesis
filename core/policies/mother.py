@@ -2,18 +2,9 @@ import numpy as np
 from func.path_finding import astar
 from core.sim.movement import in_bounds, best_step
 from core.policies.deficit import IDEAL_VALUE, deficit_abs, deficit_high, deficit_low
-
+import random
+random.seed(42)
 np.random.seed(42)
-# u_1 = [1, 1, 1]     # Foraging
-# u_2 = [1, 1, 1]     # Care 
-# u_3 = [1, 1, 1]    # Self-Preservation
-# u_4 = [1, 1, 1, 1]     # Protect
-
-u_1 = np.random.uniform(0,1 ,3)
-u_2 = np.random.uniform(0,1 ,3)
-u_3 = np.random.uniform(0,1 ,3)
-u_4 = np.random.uniform(0,1 ,4)
-
 
 def mother_policy_propose(world):
     perception_range = 100
@@ -22,15 +13,14 @@ def mother_policy_propose(world):
     occupied_now = {(m.x, m.y) for m in world.mothers}
     mother_receive = world.foods + world.mothers + world.children + world.threats
 
-    intended_food = {}    # mother -> Food
     forage_modes = {}
-    intended_child = set()
+    intended_actions = {}
 
     prev_pos = {m: (m.x, m.y) for m in world.mothers}
 
     for mother in world.mothers:
 
-        if mother.fatigue >= 100:
+        if mother.fatigue >= 90:
             proposals[mother] = (mother.x, mother.y)
             continue
 
@@ -41,26 +31,26 @@ def mother_policy_propose(world):
 
         # ----- Select motivation -----
         motivation_compute(mother)
-        motivation = select_motivation(mother=mother)
+        # mother.selected_motivation = select_motivation(mother=mother)
+        mother.selected_motivation = "Protect"
 
+        # motivation = "Forage"
+        goal, action, forage_mode = choose_goal_from_motivation(
+            world, mother,  mother.selected_motivation, food_perceived
+            )
+        
+        print(goal, action, forage_mode)
 
-        motivation = "Forage"
-        goal, target_food, wants_child, forage_mode = choose_goal_from_motivation(world, mother, motivation, food_perceived)
-
-        if wants_child:
-            intended_child.add(mother)
-
-        if target_food:
-            intended_food[mother] = target_food
+        if action is not None:
+            intended_actions[mother] = action
+            proposals[mother] = (mother.x, mother.y)
+            if forage_mode is not None:
+                forage_modes[mother] = forage_mode
+            continue
 
         if forage_mode is not None:
             forage_modes[mother] = forage_mode
-
-        # print(goal, target_food, wants_child)
-
         
-
-
         # ----- Hanndle Motivation not have -----
         if goal is None:
             valid_moves = []
@@ -101,100 +91,161 @@ def mother_policy_propose(world):
 
     intents = {
         "prev_pos": prev_pos,
-        "intended_food": intended_food,
-        "intended_child": intended_child,
-        "forage_modes": forage_modes
+        "forage_modes": forage_modes,
+        "intended_actions": intended_actions
     }
     return proposals, intents
 
 def apply_mother_intents(world, intents):
     prev_pos = intents["prev_pos"]
-    intended_food = intents["intended_food"]
-    intended_child = intents["intended_child"]
     forage_modes = intents["forage_modes"]
+    actions = intents["intended_actions"]
 
     # physiology
     for mother in world.mothers:
         moved = (prev_pos[mother] != (mother.x, mother.y))
-        mother.update_physiology(moved=moved)
+        action = actions.get(mother)
+        acted = action is not None
+        mother.update_physiology(moved=moved, acted=acted)
 
-    # interactions
     for mother in world.mothers:
-        # f = intended_food.get(mother)
-        # if f is not None and (mother.x, mother.y) == (f.x, f.y) and not f.collected and mother.alive:
-        #     f.collect()
-        #     mother.picking_food(True)
-            # mother.energy += 5
-
-        f = intended_food.get(mother)        
-        mode = forage_modes.get(mother)
-
-
-
-        # print(mode)
-        if f is not None and (mother.x, mother.y) == (f.x, f.y) and not f.collected and mother.alive:
-            f.collect()
-            mother.food_inventory += 1
-
-
         child = mother.child
-        if mother in intended_child and child is not None and (mother.x, mother.y) == (child.x, child.y) and child.is_alive():
-            mother.picking_child(True)
-            child.set_carried(True)
+        if child is None:
+            continue
+        moved = prev_pos[mother] != (mother.x, mother.y)
+        if child.is_carried and moved:
+            child.set_carried(False)
+            mother.picking_child(False)
+            child.x, child.y = prev_pos[mother]
 
-        if child is not None and child.is_carried:
-            child.x, child.y = mother.x, mother.y
+    # Action
+    for mother in world.mothers:
+        action = actions.get(mother)
+        child = mother.child
+
+
+        if action == "care":
+            if child and (mother.x, mother.y) == (child.x, child.y):
+                child.warmth = min(50.0, child.warmth + 1.0)
+        
+        elif action == "rest":
+            pass
+
+        elif action == 'eat':
+            if mother.food_inventory > 0:
+                mother.food_inventory -= 1
+                mother.energy = min(100, mother.energy + 5)
+            else: 
+                f = food_at_cell(world, mother.x, mother.y)
+                if f is not None:
+                    f.collect()
+                    mother.energy = min(100, mother.energy + 5)
+        
+        elif action == 'pick_food':
+            f = food_at_cell(world, mother.x, mother.y)
+            if f and not f.collected:
+                f.collect()
+                mother.food_inventory += 1
+
+        elif action == "feed_child":
+            if child and child.is_alive() and mother.food_inventory > 0 and (mother.x, mother.y) == (child.x, child.y):
+                mother.food_inventory -= 1
+                child.hunger = max(0, child.hunger - 20)
+            
+        elif action == 'threaten':
+            pass
 
 def motivation_compute(mother):
 
     # Mother attr.
+    m_closeness_def = deficit_abs(mother.closeness_child, IDEAL_VALUE['M_closeness'])
     m_energy_def = deficit_low(mother.energy, IDEAL_VALUE['M_energy'])
     m_fear = mother.fear_threat
     m_bonding = mother.bonding
-    m_closeness_def = deficit_abs(mother.closeness_child, IDEAL_VALUE['M_closeness'])
     m_fatigue = mother.fatigue
     m_stress = mother.stress
 
-    if mother.child is not None:
-        child = mother.child
+    # Normalize Mother attr.
+    normalize_value = 100.0
+    m_closeness_def = m_closeness_def / normalize_value
+    m_energy_def = m_energy_def / normalize_value
+    m_fear = m_fear / normalize_value
+    m_bonding = m_bonding / normalize_value
+    m_fatigue = m_fatigue / normalize_value
+    m_stress = m_stress / normalize_value
 
+    # Child alive >,<
+    if mother.child is not None and mother.child.alive:
+        child = mother.child
         # Child deficit
         c_hunger_def = deficit_high(child.hunger, IDEAL_VALUE['C_hunger'])
-        c_warmth_def = deficit_abs(child.warmth, IDEAL_VALUE['C_warmth'])
+        c_warmth_def = deficit_abs(child.warmth, IDEAL_VALUE['C_warmth']) * 2 # range is for [0,50]
         c_injury_def = deficit_high(child.injury, IDEAL_VALUE['C_injury'])
+
+        # Normalize Child deficit
+        c_hunger_def /= normalize_value
+        c_warmth_def /= normalize_value
+        c_injury_def /= normalize_value
+        # print(c_hunger_def)
+    
+    # Child died T_T
     else:
         c_hunger_def = 0
-        m_fear = 0
         c_warmth_def = 0
         m_closeness_def = 0
         c_injury_def = 0
 
-    # Compute Motivation
-    M_forage = (
-        u_1[0] * c_hunger_def +
-        u_1[1] * m_energy_def +
-        u_1[2] * (1-m_fear)
+    # --- Compute Motivation ---
+    # Forage
+    forage_u = mother.u["forage"]
+    forage_u_sum = weight_sum(
+        forage_u,
+        ['child_hunger', 'energy_deficit', 'low_fear']
     )
+    M_forage = 100.0 * (
+        forage_u['child_hunger'] * c_hunger_def +
+        forage_u['energy_deficit'] * m_energy_def +
+        forage_u['low_fear'] * (1 - m_fear)
+    ) / forage_u_sum
 
-    M_Care = (
-        u_2[0] * c_warmth_def + 
-        u_2[1] * m_closeness_def +
-        u_2[2] * m_bonding
+    # Care
+    care_u = mother.u["care"]
+    care_u_sum = weight_sum(
+        care_u,
+        ['child_warmth', 'closeness_deficit', 'bonding']
     )
+    M_Care = 100.0 * (
+        care_u['child_warmth'] * c_warmth_def + 
+        care_u['closeness_deficit'] * m_closeness_def +
+        care_u['bonding'] * m_bonding
+    ) / care_u_sum
 
 
-    M_self = (
-        u_3[0] * m_fatigue +
-        u_3[1] * m_fear +
-        u_3[2] * m_stress
+    # Self
+    self_u = mother.u["self"]
+    self_u_sum = weight_sum(
+        self_u,
+        ['fatigue', 'fear', 'stress']
     )
+    M_self = 100.0 * (
+        self_u['fatigue'] * m_fatigue +
+        self_u['fear'] * m_fear +
+        self_u['stress'] * m_stress
+    ) / self_u_sum
 
-    M_protect = (
-        u_4[0] * c_injury_def + 
-        u_4[1] * m_fear + 
-        u_4[2] * m_closeness_def +
-        u_4[3] * m_bonding
+
+    # Protect
+    protect_u = mother.u["protect"]
+    protect_u_sum = weight_sum(
+        protect_u,
+        ['child_injury', 'fear', 'closeness_deficit', 'bonding']
     )
+    M_protect = 100.0 * (
+        protect_u['child_injury'] * c_injury_def + 
+        protect_u['fear'] * m_fear + 
+        protect_u['closeness_deficit'] * m_closeness_def +
+        protect_u['bonding'] * m_bonding
+    ) / protect_u_sum
     
     mother.motivations['Forage']    = clamp(M_forage)
     mother.motivations['Care']      = clamp(M_Care)
@@ -210,62 +261,90 @@ def select_motivation(mother):
 
     mot_idx = np.argmax(motivation_values)
     selected = motivation_names[mot_idx]
-    # print(f"Selected motivation: {selected} ({motivation_values[mot_idx]:.2f})\n")
+    print(f"Selected motivation: {selected} ({motivation_values[mot_idx]:.2f})\n")
 
     return selected
 
-def clamp(x, lo=0, hi=100):
+def clamp(x, lo=0.0, hi=100.0):
     return max(lo, min(x, hi))
-
 
 def choose_goal_from_motivation(world, mother, selected, food_perceived):
     child = mother.child
 
 
     if selected == "Forage":
+
         m_energy_def = deficit_low(mother.energy, IDEAL_VALUE['M_energy'])
-
-        if child is not None:
-            c_hunger_def = deficit_high(child.hunger, IDEAL_VALUE['C_hunger'])
-        else:
-            c_hunger_def = 0
+        c_hunger_def = deficit_high(child.hunger, IDEAL_VALUE['C_hunger']) if child else 0
         
-        print(mother.food_inventory)
-
-        # ---- subdecision inside Forage ----
+        # carring food already
         if mother.food_inventory > 0:
-            # already carrying food
-            if child is not None and child.is_alive() and c_hunger_def > m_energy_def:
-                return (child.x, child.y), None, False, "give_child"
-            else:
-                return (mother.x, mother.y), None, False, "eat_self"
-
-        else:
-            # no food yet -> go fetch food
-            if food_perceived:
-                food_perceived.sort(key=lambda t: t[1])
-                target_food = food_perceived[0][0]
-
-                if c_hunger_def > m_energy_def:
-                    return (target_food.x, target_food.y), target_food, False, "fetch_for_child"
+            if child and c_hunger_def > m_energy_def:
+                if (mother.x, mother.y) == (child.x, child.y):
+                    return (mother.x, mother.y), "feed_child", "give_child"
                 else:
-                    return (target_food.x, target_food.y), target_food, False, "fetch_for_self"
+                    return (child.x, child.y), None, "give_child"
+                
+            else: 
+                return (mother.x, mother.y), "eat", "eat_self"
+            
+        # not carrying food 
+        if food_perceived:
+            food_perceived.sort(key=lambda t:t[1])
+            target_food = food_perceived[0][0]
 
-        return None, None, False, None
-    
-    
+            if (mother.x, mother.y) == (target_food.x, target_food.y):
+                if child and c_hunger_def > m_energy_def:
+                    return (mother.x, mother.y), "pick_food", "fetch_for_child"
+                else: 
+                    return (mother.x, mother.y), "eat", "fetch_for_self"
+                
+            return (target_food.x, target_food.y), None, None
+        return (mother.x, mother.y), None, None    
 
     elif selected == "Care":
-        if child is not None and child.is_alive() and not child.is_carried:
-            return (child.x, child.y), None, True, None
-        return (mother.x, mother.y), None, False, None
+        if child is not None and child.is_alive():
+            if (mother.x, mother.y) == (child.x, child.y):
+                return (mother.x, mother.y), "care", None
+            else:
+                return (child.x, child.y), None, None
 
     elif selected == "Protect":
-        if child is not None and child.is_alive():
-            return (child.x, child.y), None, False, None
-        return (mother.x, mother.y), None, False, None
+        if child is None or not child.is_alive():
+            return (mother.x, mother.y), None, None
+        
+        d_child = mother.distance_to(child.x, child.y)
+
+        if d_child > 1:
+            return (child.x, child.y), None, None
+        
+        # Find nearest threat
+        nearest = None
+        best_d = 999
+        for t in world.threats:
+            d = child.distance_to(t.x, t.y)
+            if d < best_d:
+                best_d = d
+                nearest = t
+
+        if nearest is not None:
+            return (nearest.x, nearest.y), None, None
+        
+        return (mother.x, mother.y), None, None
+
 
     elif selected == "Self":
-        return (mother.x, mother.y), None, False, None
+        return (mother.x, mother.y), "rest", None
 
-    return None, None, False, None
+    return None, None, None
+
+
+
+def weight_sum(group, keys):
+    return sum(group[k] for k in keys)
+
+def food_at_cell(world, x, y):
+    for f in world.foods:
+        if not f.collected and (f.x, f.y) == (x, y):
+            return f
+    return None

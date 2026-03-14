@@ -6,6 +6,11 @@ from core.policies.threat import threat_policy_propose, apply_threat_intents
 from core.sim.movement import resolve_and_apply_moves
 from collections import defaultdict, deque
 
+import random
+import numpy as np
+
+random.seed(42)
+np.random.seed(42)
 
 class World:
     def __init__(self, grid_w, grid_h, mother_starts=None, child_start=None, 
@@ -64,9 +69,28 @@ class World:
             "closeness_child": deque(maxlen=self.history_len),
             "OT": deque(maxlen=self.history_len),
             "CORT": deque(maxlen=self.history_len),
+
+            "mot_forage": deque(maxlen=self.history_len),
+            "mot_care": deque(maxlen=self.history_len),
+            "mot_self": deque(maxlen=self.history_len),
+            "mot_protect": deque(maxlen=self.history_len),
+            # "mot_selected": deque(maxlen=self.history_len),
+
+
+            "sel_forage": deque(maxlen=self.history_len),
+            "sel_care": deque(maxlen=self.history_len),
+            "sel_self": deque(maxlen=self.history_len),
+            "sel_protect": deque(maxlen=self.history_len),
         })
 
 
+        self.child_history = defaultdict(lambda: {
+            "hunger": deque(maxlen=self.history_len),
+            "warmth": deque(maxlen=self.history_len),
+            "injury": deque(maxlen=self.history_len),
+            # "carried": deque(maxlen=self.history_len),
+            # "threat_dist": deque(maxlen=self.history_len),
+        })
         
     def step(self, dt: float = 0.1):
 
@@ -78,12 +102,13 @@ class World:
         # Internal dynamics before decision 
         for c in self.children:
             # c.print_state()
-            # c.update(self)
+            c.update(self)
+            # c.print_state()
             # print(c.id, c.energy, c.alive)
             pass 
 
         for m in self.mothers:
-            # m.update_psych_neuro(self)
+            m.update_psych_neuro(self)
             # print(m.id, m.energy, m.alive)
 
             # m.print_state()
@@ -97,7 +122,7 @@ class World:
             pass
         
 
-        # Decision making
+        # Motivation select
         m_prop, m_int = mother_policy_propose(self)
         t_prop, t_int = threat_policy_propose(self)
 
@@ -118,6 +143,7 @@ class World:
         if self.tick % spawn_interval == 0 and self.tick != 0:
             self.spawn_random_food(n=1, empty_cell=empty_cell, occupied=occupied)
 
+        self.record_child_states()
         self.record_mother_states()
         self.t += dt
         self.tick += 1
@@ -163,10 +189,7 @@ class World:
         self.mothers = [m for m in self.mothers if m.is_alive()]
 
     def cleanup_pick_entities(self):
-        # picked_food = [f for f in self.foods if f.collected]
         self.foods = [f for f in self.foods if not f.collected]
-        # print(picked_food)
-
 
     @property
     def has_living_agents(self):
@@ -187,10 +210,16 @@ class World:
             return False, None, None
         return True, empty_grid, occupied
         
-
     def record_mother_states(self):
         self.tick_history.append(self.tick)
 
+        mot_to_idx = {
+            "Forage": 0,
+            "Care": 1,
+            "Self": 2,
+            "Protect": 3,
+            }
+        
         for m in self.mothers:
             h = self.mother_history[m.id]
             h["energy"].append(m.energy)
@@ -201,3 +230,30 @@ class World:
             h["closeness_child"].append(m.closeness_child)
             h["OT"].append(m.OT)
             h["CORT"].append(m.CORT)
+
+            h["mot_forage"].append(m.motivations["Forage"])
+            h["mot_care"].append(m.motivations["Care"])
+            h["mot_self"].append(m.motivations["Self"])
+            h["mot_protect"].append(m.motivations["Protect"])
+
+            selected = max(m.motivations, key=m.motivations.get)
+
+            h["sel_forage"].append(1 if selected == "Forage" else 0)
+            h["sel_care"].append(1 if selected == "Care" else 0)
+            h["sel_self"].append(1 if selected == "Self" else 0)
+            h["sel_protect"].append(1 if selected == "Protect" else 0)
+
+
+    def record_child_states(self):
+        for c in self.children:
+            h = self.child_history[c.id]
+
+            h["hunger"].append(c.hunger)
+            h["warmth"].append(c.warmth)
+            h["injury"].append(c.injury)
+            # h["carried"].append(1 if c.is_carried else 0)
+
+            # if c.nearest_threat_dist == float("inf"):
+            #     h["threat_dist"].append(None)
+            # else:
+            #     h["threat_dist"].append(c.nearest_threat_dist)

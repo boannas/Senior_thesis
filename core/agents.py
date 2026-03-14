@@ -1,20 +1,66 @@
 import math
 from core.entities import Food
 from core.policies.deficit import IDEAL_VALUE, deficit_low
+import random
 import numpy as np
-# Adjustable weights
-# w_1 = [0.33, 0.33, 0.33]  # Child need
-# w_2 = [0.1, 0.01]   # OT
-# w_3 = [0.01, 0.02]  # Bonding
-# w_4 = [0.1, 0.1, 0.05, 0.01]    # CORT
-# w_5 = [1, 1, 1, 1]  # Stress
 
+random.seed(42)
 np.random.seed(42)
-w_1 = np.random.uniform(0, 1, 3)
-w_2 = np.random.uniform(0 ,1, 2)
-w_3 = np.random.uniform(0 ,1, 2)
-w_4 = np.random.uniform(0 ,1, 4)
-w_5 = np.random.uniform(0 ,1, 4)
+rng = np.random.default_rng(42)
+
+
+
+
+
+# self.w = {
+#     "child_need": {
+#         "hunger": 0.4,
+#         "warmth": 0.2,
+#         "injury": 0.4,
+#     },
+#     "ot": {
+#         "closeness_gain": 0.05,
+#         "decay": 0.02,
+#     },
+#     "bonding": {
+#         "ot_gain": 0.03,
+#         "child_need_decay": 0.02,
+#         "child_absent_decay": 0.01,
+#     },
+#     "cort": {
+#         "threat_gain": 0.3,
+#         "child_need_gain": 0.4,
+#         "energy_deficit_gain": 0.3,
+#         "decay": 0.05,
+#     },
+#     "stress": {
+#         "cort_gain": 0.4,
+#         "fear_gain": 0.3,
+#         "child_need_gain": 0.3,
+#         "decay": 0.05,
+#     },
+#     "fear": {
+#         "threat_gain": 0.3,
+#         "decay": 0.05,
+#     }
+# }
+
+
+
+MOVED_cost = {
+    "Energy": -1.0,
+    "Fatigue": 2.0
+}
+
+ACTED_cost = {
+    "Energy": -0.1,
+    "Fatigue": 0.1
+}
+
+RECOVERY_rate = {
+    "Energy": -0.1, # agent's hunger increase
+    "Fatigue": -0.1 # but, fatigue reduce
+}
 
 class Agent:
     """Base class for agents (mother and child)"""
@@ -136,6 +182,69 @@ class MotherAgent(Agent):
             "Protect":  0.0
         }
 
+        self.selected_motivation = "Self"
+
+        # Psych weights
+        self.w = {
+            "child_need": {
+                "hunger": rng.uniform(0,1),
+                "warmth": rng.uniform(0,1),
+                "injury": rng.uniform(0,1),
+            },
+            "ot": {
+                "closeness_gain": rng.uniform(0,1),
+                "decay": rng.uniform(0,1),
+            },
+            "bonding": {
+                "ot_gain": rng.uniform(0,1),
+                "child_need_decay": rng.uniform(0,1),
+                "child_absent_decay": rng.uniform(0,1),
+            },
+            "cort": {
+                "threat_gain": rng.uniform(0,1),
+                "child_need_gain": rng.uniform(0,1),
+                "energy_deficit_gain": rng.uniform(0,1),
+                "decay": rng.uniform(0,1),
+            },
+            "stress": {
+                "cort_gain": rng.uniform(0,1),
+                "fear_gain": rng.uniform(0,1),
+                "child_need_gain": rng.uniform(0,1),
+                "decay": rng.uniform(0,1),
+            },
+            "fear": {
+                "threat_gain": rng.uniform(0,1),
+                "decay": rng.uniform(0,1),
+            },
+        }
+
+        # Motivation weights
+        self.u = {
+            "forage": {
+                "child_hunger": rng.uniform(0,1),
+                "energy_deficit": rng.uniform(0,1),
+                "low_fear": rng.uniform(0,1),
+            },
+            "care": {
+                "child_warmth": rng.uniform(0,1),
+                "closeness_deficit": rng.uniform(0,1),
+                "bonding": rng.uniform(0,1),
+            },
+            "self": {
+                "fatigue": rng.uniform(0,1),
+                "fear": rng.uniform(0,1),
+                "stress": rng.uniform(0,1),
+            },
+            "protect": {
+                "child_injury": rng.uniform(0,1),
+                "fear": rng.uniform(0,1),
+                "closeness_deficit": rng.uniform(0,1),
+                "bonding": rng.uniform(0,1),
+            }
+        }
+
+    
+
 
     def is_alive(self):
         if not self.alive:
@@ -161,22 +270,23 @@ class MotherAgent(Agent):
         
         # cost 
         if moved:
-            self.energy -= 1.0
-            self.fatigue += 2.0
+            self.energy += MOVED_cost["Energy"]
+            self.fatigue += MOVED_cost["Fatigue"]
 
-        # elif acted:
-        #     self.energy -= 1.0
-        #     self.fatigue += 1.0
+        elif acted:
+            self.energy += ACTED_cost["Energy"]
+            self.fatigue += ACTED_cost["Fatigue"]
         
+        # natural recovery
         else :
-            # natural recovery
-            self.fatigue = max(0.0, self.fatigue - 0.1)
-            self.energy = max(0.0, self.energy - 0.1)
+            self.energy = max(0.0, self.energy + RECOVERY_rate["Energy"])   # Always hungry
+            self.fatigue = max(0.0, self.fatigue + RECOVERY_rate["Fatigue"]) 
 
         # clamp 
-        self.energy = max(0.0, self.energy)
-        self.fatigue = min(100.0, self.fatigue)
+        self.energy = max(0.0, min(100.0, self.energy))
+        self.fatigue = max(0.0, min(100.0, self.fatigue))
 
+        # DEAD -_-'
         if self.energy <= 0.0:
             self.alive = False
 
@@ -187,76 +297,126 @@ class MotherAgent(Agent):
 
         # Child Signal
         child_need = 0.0
-        energy_def = (deficit_low(self.energy, IDEAL_VALUE['M_energy']))
+        energy_def = deficit_low(self.energy, IDEAL_VALUE['M_energy'])
+
+        fear_increase = 0.0
+        fear_decay = self.w["fear"]["decay"] * self.fear_threat
+
+        ot_increase = 0.0
+        ot_decay = self.w["ot"]["decay"]* self.OT
+
+        cort_increase = 0.0
+        cort_decay = self.w["cort"]["decay"] * self.CORT
+
+        closeness_child = 0.0
+        stress_decay = self.w["stress"]["decay"] * self.stress
+
 
         if self.child is not None and self.child.is_alive():
 
-            # higher when child hunger high or warmth far from ideal or injury high
-            child_need = (
-                w_1[0] * (self.child.hunger ) +
-                w_1[1] * (abs(self.child.warmth - 50.0) ) +
-                w_1[2] * (self.child.injury )
-            ) 
 
-            # closeness 100 when same cell, 0 when far
             dchild = self.distance_to(self.child.x, self.child.y, metric='octile')
-            norm_dist = dchild / max(world.grid_w, world.grid_h)
-            self.closeness_child = max(0.0, 100.0 * (1.0 - norm_dist))
+            norm_dist = min(1.0, dchild / max(world.grid_w, world.grid_h))
+            closeness_child = 100.0 * (1.0 - norm_dist)
+
+            hunger_sig = self.child.hunger / 100.0
+            warmth_sig = abs(self.child.warmth - 50.0) / 50.0
+            injury_sig = self.child.injury / 100.0
+
+
+            child_need_gain_sum = weight_sum(
+                self.w["child_need"],
+                ["hunger", "warmth", "injury"]
+            )
+            child_need = 100 * (
+                self.w["child_need"]["hunger"] * hunger_sig +
+                self.w["child_need"]["warmth"] * warmth_sig +
+                self.w["child_need"]["injury"] * injury_sig
+            ) / child_need_gain_sum
+
+            bonding_decay = self.w["bonding"]["child_need_decay"] * child_need
 
             # OT
-            # OT rises when close & doing care
-            if self.closeness_child >= 90:  # distance to child <= xx % 
-                ot_increase = w_2[0] * self.closeness_child
-                self.OT = max(0.0, min(100.0, self.OT + ot_increase))
-            else :
-                ot_decay = w_2[1] * self.OT 
-                self.OT = max(0.0, min(100.0, self.OT - ot_decay))
-
-            # Bonding 
-            # OT strengthens bond; unmet need reduce it slightly
-            self.bonding = max(0.0, min(100.0, self.bonding + w_3[0] * self.OT - w_3[1] * child_need))
+            if closeness_child >= 90:  # distance to child <= xx % 
+                ot_increase = self.w["ot"]["closeness_gain"] * closeness_child
 
             # Threat proximity (reference with child)
             threat_near = 0.0
             threat_radius = 10.0
-            
+
             for t in world.threats:
                 d = self.child.distance_to(t.x, t.y, metric='octile')
                 if d <= threat_radius: 
                     threat_near = max(threat_near, (threat_radius-d)/threat_radius)
             
+            fear_increase = 100.0 * (self.w["fear"]["threat_gain"] * threat_near)
+
             # CORT 
-            cort_increase = (
-                w_4[0] * threat_near +
-                w_4[1] * child_need + 
-                w_4[2] * energy_def
-                )
+            cort_gain_sum = weight_sum(
+                self.w["cort"],
+                ["threat_gain", "child_need_gain", "energy_deficit_gain"]
+            )
+            cort_increase = 100.0 * (
+                self.w["cort"]["threat_gain"] * threat_near +
+                self.w["cort"]["child_need_gain"] * (child_need/100.0) + 
+                self.w["cort"]["energy_deficit_gain"] * (energy_def/100.0)
+                ) / cort_gain_sum
+
             
-            # Fear 
-            self.fear_threat = max(0.0, min(100.0, self.fear_threat + threat_near))
 
         # Child Dead T_T
         else:
-            child_dead_decay = 0.5
-            self.OT = self.OT - child_dead_decay
-            self.closeness_child = 0.0
-            self.bonding = self.bonding - child_dead_decay
+            closeness_child = 0.0
+            bonding_decay = self.w["bonding"]["child_absent_decay"] * self.bonding
 
-            cort_increase = (w_4[2] * energy_def)
-        cort_reduce = w_4[3] * self.CORT
-        self.CORT = max(0.0, min(100.0, self.CORT + cort_increase - cort_reduce))
+            cort_gain_sum = weight_sum(
+                self.w["cort"],
+                ["threat_gain", "child_need_gain", "energy_deficit_gain"]
+            )
+            cort_increase = 100.0 * (
+                self.w["cort"]["energy_deficit_gain"] * (energy_def/100.0)
+            ) / cort_gain_sum
 
-        self.stress = max(0.0, min(100.0,
-            w_5[0] * self.CORT +
-            w_5[1] * self.fear_threat +
-            w_5[2] * child_need
+        # Compute the psych states
+        stress_gain_sum = weight_sum(
+            self.w["stress"],
+            ["cort_gain", "fear_gain", 'child_need_gain']
+        )
+        stress_increase = (
+            self.w["stress"]["cort_gain"] * self.CORT +
+            self.w["stress"]["fear_gain"] * self.fear_threat + 
+            self.w["stress"]["child_need_gain"] * child_need
+        ) / stress_gain_sum
+
+
+        self.closeness_child = max(0.0, min(100.0, closeness_child))
+
+        self.OT = max(0.0, min(100.0, self.OT + ot_increase - ot_decay))
+        
+        self.bonding = max(0.0, min(100.0, 
+            self.bonding + self.w["bonding"]["ot_gain"] * self.OT - bonding_decay
             ))
+        
+        self.fear_threat = max(0.0, min(100.0, 
+            self.fear_threat + fear_increase - fear_decay
+            ))
+        
+        self.CORT = max(0.0, min(100.0, 
+            self.CORT + cort_increase - cort_decay
+            ))
+        
+        self.stress = max(0.0, min(100,
+            self.stress + stress_increase - stress_decay
+            ))
+
+
+        # self.print_state()
 
     def print_state(self):
 
         print(f"\n[MOTHER {self.id}]")
-        # print("Energy:", self.energy)
-        # print("Fatigue:", self.fatigue)
+        print("Energy:", self.energy)
+        print("Fatigue:", self.fatigue)
 
         print("---Psychological---")
         print("Bonding:", self.bonding)
@@ -273,7 +433,7 @@ class MotherAgent(Agent):
         # print("Holding Child:", self.holding_child)
 
         if self.child:
-            print("Child ID:", self.child.id)
+            print("Child ID:", self.child.id, self.child.alive)
 
         print("Alive:", self.alive)
 
@@ -324,6 +484,9 @@ class ChildAgent(Agent):
             self.alive = False
             return
         
+        self.threat_close = False
+        self.nearest_threat_dist = float("inf")
+
         # Hunger increase over time
         self.hunger = min(100.0, self.hunger + 1.0)
 
@@ -348,7 +511,7 @@ class ChildAgent(Agent):
         if not self.is_alive():
             self.alive = False
 
-        self.print_state()
+        # self.print_state()
 
     def print_state(self):
 
@@ -374,6 +537,10 @@ class ThreatAgent(Agent):
         self.perception_range = 2
         self.energy = 100.0
 
+        self.mode = "patrol"
+        self.flee_timer = 0
+        self.last_seen_mothers = []
+
     def print_state(self):
         print(f"\n[THREAT {self.id}]")
         print("Position:", (self.x, self.y))
@@ -385,3 +552,5 @@ class ThreatAgent(Agent):
 
 
 
+def weight_sum(group, keys):
+    return sum(group[k] for k in keys)
