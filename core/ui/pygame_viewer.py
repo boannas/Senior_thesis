@@ -14,12 +14,19 @@ from core.ui.pygame_render import (
     draw_clock_text
 )
 from core.config.config import load_config, random_unique_positions
-from func.live_plot import MotherStatePlotter, MotherMotivationPlotter, ChildStatePlotter
+from func.live_plot import MotherStatePlotter, MotherMotivationPlotter, ChildStatePlotter, FixedVsPlasticPlotter
+from func.run_logger import RunLogger
 import random
 import numpy as np
 
 random.seed(42)
 np.random.seed(42)
+
+# Run logging: "csv" (only CSV), "plot" (only realtime plots), "both", or None (no logger)
+LOG_RUN_MODE = "csv"
+LOG_RUN_CSV_PATH = "run_log_fixed_weight.csv"
+# When in CSV-only mode, no matplotlib windows (simulation only)
+SHOW_PLOTS = LOG_RUN_MODE != "csv"
 
 def main():
 
@@ -87,10 +94,17 @@ def main():
         threat_starts=threat_starts,
         day_step=day_step
     )
-    plotter = MotherStatePlotter(world)
-    # mot_plotter = MotherMotivationPlotter(world)
-    child_plotter = ChildStatePlotter(world)
-    
+    if SHOW_PLOTS:
+        plotter = MotherStatePlotter(world)
+        child_plotter = ChildStatePlotter(world)
+        weight_plotter = FixedVsPlasticPlotter(world)
+    else:
+        plotter = child_plotter = weight_plotter = None
+    run_logger = RunLogger(
+        world,
+        mode=LOG_RUN_MODE or "csv",
+        csv_path=LOG_RUN_CSV_PATH,
+    ) if LOG_RUN_MODE else None
 
     # Main game loop
     running = True
@@ -116,10 +130,12 @@ def main():
         while accumulator >= dt:
             accumulator -= dt
             world.step(dt)
-            if world.tick % 1 == 0:
+            if world.tick % 1 == 0 and SHOW_PLOTS:
                 plotter.update()
-                # mot_plotter.update()
                 child_plotter.update()
+                weight_plotter.update()
+            if run_logger:
+                run_logger.update()
 
         
         # ==============================================
@@ -151,6 +167,8 @@ def main():
         pygame.display.flip()
         clock.tick(fps)
     
+    if run_logger:
+        run_logger.close()
     pygame.quit()
     sys.exit()
 

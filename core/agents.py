@@ -1,4 +1,5 @@
 import math
+import copy
 from core.entities import Food
 from core.policies.deficit import IDEAL_VALUE, deficit_low
 import random
@@ -184,67 +185,32 @@ class MotherAgent(Agent):
 
         self.selected_motivation = "Self"
 
-        # Psych weights
-        self.w = {
-            "child_need": {
-                "hunger": rng.uniform(0,1),
-                "warmth": rng.uniform(0,1),
-                "injury": rng.uniform(0,1),
-            },
-            "ot": {
-                "closeness_gain": rng.uniform(0,1),
-                "decay": rng.uniform(0,1),
-            },
-            "bonding": {
-                "ot_gain": rng.uniform(0,1),
-                "child_need_decay": rng.uniform(0,1),
-                "child_absent_decay": rng.uniform(0,1),
-            },
-            "cort": {
-                "threat_gain": rng.uniform(0,1),
-                "child_need_gain": rng.uniform(0,1),
-                "energy_deficit_gain": rng.uniform(0,1),
-                "decay": rng.uniform(0,1),
-            },
-            "stress": {
-                "cort_gain": rng.uniform(0,1),
-                "fear_gain": rng.uniform(0,1),
-                "child_need_gain": rng.uniform(0,1),
-                "decay": rng.uniform(0,1),
-            },
-            "fear": {
-                "threat_gain": rng.uniform(0,1),
-                "decay": rng.uniform(0,1),
-            },
+        # --- Fixed gene (inherited, never changes in lifetime) ---
+        self.w_fixed = {
+            "child_need": {"hunger": rng.uniform(0,1), "warmth": rng.uniform(0,1), "injury": rng.uniform(0,1)},
+            "ot": {"closeness_gain": rng.uniform(0,1), "decay": rng.uniform(0,1)},
+            "bonding": {"ot_gain": rng.uniform(0,1), "child_need_decay": rng.uniform(0,1), "child_absent_decay": rng.uniform(0,1)},
+            "cort": {"threat_gain": rng.uniform(0,1), "child_need_gain": rng.uniform(0,1), "energy_deficit_gain": rng.uniform(0,1), "decay": rng.uniform(0,1)},
+            "stress": {"cort_gain": rng.uniform(0,1), "fear_gain": rng.uniform(0,1), "child_need_gain": rng.uniform(0,1), "decay": rng.uniform(0,1)},
+            "fear": {"threat_gain": rng.uniform(0,1), "decay": rng.uniform(0,1)},
         }
-
-        # Motivation weights
-        self.u = {
-            "forage": {
-                "child_hunger": rng.uniform(0,1),
-                "energy_deficit": rng.uniform(0,1),
-                "low_fear": rng.uniform(0,1),
-            },
-            "care": {
-                "child_warmth": rng.uniform(0,1),
-                "closeness_deficit": rng.uniform(0,1),
-                "bonding": rng.uniform(0,1),
-            },
-            "self": {
-                "fatigue": rng.uniform(0,1),
-                "fear": rng.uniform(0,1),
-                "stress": rng.uniform(0,1),
-            },
-            "protect": {
-                "child_injury": rng.uniform(0,1),
-                "fear": rng.uniform(0,1),
-                "closeness_deficit": rng.uniform(0,1),
-                "bonding": rng.uniform(0,1),
-            }
+        self.u_fixed = {
+            "forage": {"child_hunger": rng.uniform(0,1), "energy_deficit": rng.uniform(0,1), "low_fear": rng.uniform(0,1)},
+            "care": {"child_warmth": rng.uniform(0,1), "closeness_deficit": rng.uniform(0,1), "bonding": rng.uniform(0,1)},
+            "self": {"fatigue": rng.uniform(0,1), "fear": rng.uniform(0,1), "stress": rng.uniform(0,1)},
+            "protect": {"child_injury": rng.uniform(0,1), "fear": rng.uniform(0,1), "closeness_deficit": rng.uniform(0,1), "bonding": rng.uniform(0,1)},
         }
+        self.w_plastic = copy.deepcopy(self.w_fixed)
+        self.u_plastic = copy.deepcopy(self.u_fixed)
+        self.eta = 0.02
 
-    
+    @property
+    def w(self):
+        return {cat: {k: (self.w_fixed[cat][k] + self.w_plastic[cat][k]) / 2.0 for k in self.w_fixed[cat]} for cat in self.w_fixed}
 
+    @property
+    def u(self):
+        return {cat: {k: (self.u_fixed[cat][k] + self.u_plastic[cat][k]) / 2.0 for k in self.u_fixed[cat]} for cat in self.u_fixed}
 
     def is_alive(self):
         if not self.alive:
