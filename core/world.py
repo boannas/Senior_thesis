@@ -1,7 +1,7 @@
 import random
 from core.agents import ChildAgent, MotherAgent, ThreatAgent
 from core.entities import Food
-from core.policies.mother import mother_policy_propose, apply_mother_intents
+from core.policies.mother import mother_policy_propose, apply_mother_intents, update_plasticity
 from core.policies.threat import threat_policy_propose, apply_threat_intents
 from core.sim.movement import resolve_and_apply_moves
 from collections import defaultdict, deque
@@ -132,6 +132,8 @@ class World:
         # Apply action to the environment
         resolve_and_apply_moves(all_agents, all_prop, self.grid_w, self.grid_h)
         apply_mother_intents(self, m_int)
+        for m in self.mothers:
+            update_plasticity(m, m_int.get("intended_actions", {}).get(m), self)
         apply_threat_intents(self, t_int)
 
         # cleanup dead agent
@@ -243,6 +245,25 @@ class World:
             h["sel_self"].append(1 if selected == "Self" else 0)
             h["sel_protect"].append(1 if selected == "Protect" else 0)
 
+            # Record u and w fixed vs plastic for comparison plots
+            if hasattr(m, "u_fixed") and hasattr(m, "u_plastic"):
+                for cat in m.u_fixed:
+                    for key in m.u_fixed[cat]:
+                        k_f, k_p = f"u_fixed_{cat}_{key}", f"u_plastic_{cat}_{key}"
+                        if k_f not in h:
+                            h[k_f] = deque(maxlen=self.history_len)
+                            h[k_p] = deque(maxlen=self.history_len)
+                        h[k_f].append(m.u_fixed[cat][key])
+                        h[k_p].append(m.u_plastic[cat][key])
+            if hasattr(m, "w_fixed") and hasattr(m, "w_plastic"):
+                for cat in m.w_fixed:
+                    for key in m.w_fixed[cat]:
+                        k_f, k_p = f"w_fixed_{cat}_{key}", f"w_plastic_{cat}_{key}"
+                        if k_f not in h:
+                            h[k_f] = deque(maxlen=self.history_len)
+                            h[k_p] = deque(maxlen=self.history_len)
+                        h[k_f].append(m.w_fixed[cat][key])
+                        h[k_p].append(m.w_plastic[cat][key])
 
     def record_child_states(self):
         for c in self.children:
