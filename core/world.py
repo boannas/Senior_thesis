@@ -132,8 +132,8 @@ class World:
         # Apply action to the environment
         resolve_and_apply_moves(all_agents, all_prop, self.grid_w, self.grid_h)
         apply_mother_intents(self, m_int)
-        for m in self.mothers:
-            update_plasticity(m, m_int.get("intended_actions", {}).get(m), self)
+        # for m in self.mothers:
+        #     update_plasticity(m, m_int.get("intended_actions", {}).get(m), self)
         apply_threat_intents(self, t_int)
 
         # cleanup dead agent
