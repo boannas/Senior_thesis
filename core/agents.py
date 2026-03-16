@@ -506,6 +506,7 @@ class ThreatAgent(Agent):
         self.mode = "patrol"
         self.flee_timer = 0
         self.last_seen_mothers = []
+        self.last_seen_memory_timer = 0  # ticks since last saw mother; clear memory after timeout
 
     def print_state(self):
         print(f"\n[THREAT {self.id}]")

@@ -1,1 +1,4 @@
 /env311
+*.csv
+*.pyc
+*.pyc

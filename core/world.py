@@ -1,7 +1,7 @@
 import random
 from core.agents import ChildAgent, MotherAgent, ThreatAgent
 from core.entities import Food
-from core.policies.mother import mother_policy_propose, apply_mother_intents, update_plasticity
+from core.policies.mother import mother_policy_propose, apply_mother_intents, update_plasticity, update_plasticity_hebbian
 from core.policies.threat import threat_policy_propose, apply_threat_intents
 from core.sim.movement import resolve_and_apply_moves
 from collections import defaultdict, deque
@@ -14,7 +14,13 @@ np.random.seed(42)
 
 class World:
     def __init__(self, grid_w, grid_h, mother_starts=None, child_start=None, 
-                 food_positions=None, threat_starts=None, seed=42, day_step=None):
+                 food_positions=None, threat_starts=None, seed=42, day_step=None, plasticity_rule=None,
+                 food_spawn_interval=None, food_spawn_n=1):
+        # plasticity_rule: None (off), "outcome" (deficit-gated), or "hebbian" (co-activity)
+        self.plasticity_rule = plasticity_rule
+        # Food spawning: if None, use default in step() (day_step//10, n=1)
+        self.food_spawn_interval = food_spawn_interval
+        self.food_spawn_n = food_spawn_n
         # Fixed seed for reproducibility
         random.seed(seed)
         self.t = 0
@@ -101,18 +107,14 @@ class World:
         
         # Internal dynamics before decision 
         for c in self.children:
-            # c.print_state()
+            if not c.is_alive():
+                continue
             c.update(self)
-            # c.print_state()
-            # print(c.id, c.energy, c.alive)
-            pass 
 
         for m in self.mothers:
+            if not m.is_alive():
+                continue
             m.update_psych_neuro(self)
-            # print(m.id, m.energy, m.alive)
-
-            # m.print_state()
-            pass
 
         for t in self.threats:
             # t.print_state()
@@ -122,18 +124,31 @@ class World:
             pass
         
 
-        # Motivation select
+        # Motivation select (policies skip dead agents)
         m_prop, m_int = mother_policy_propose(self)
         t_prop, t_int = threat_policy_propose(self)
 
-        all_agents = self.mothers + self.threats
+        all_agents = [m for m in self.mothers if m.is_alive()] + [t for t in self.threats if t.is_alive()]
         all_prop = {**m_prop, **t_prop}
 
         # Apply action to the environment
         resolve_and_apply_moves(all_agents, all_prop, self.grid_w, self.grid_h)
         apply_mother_intents(self, m_int)
-        # for m in self.mothers:
-        #     update_plasticity(m, m_int.get("intended_actions", {}).get(m), self)
+
+        # Plasticity: set to "outcome" (deficit-based) or "hebbian" (co-activity); None = off.
+        self._plasticity_this_tick = False
+        plasticity_rule = self.plasticity_rule
+        if plasticity_rule == "outcome":
+            for m in self.mothers:
+                if m.is_alive():
+                    update_plasticity(m, m_int.get("intended_actions", {}).get(m), self)
+            self._plasticity_this_tick = True
+        elif plasticity_rule == "hebbian":
+            for m in self.mothers:
+                if m.is_alive():
+                    update_plasticity_hebbian(m, m_int.get("intended_actions", {}).get(m), self)
+            self._plasticity_this_tick = True
+        # To enable: set world.plasticity_rule = "outcome" or "hebbian" (e.g. in main after creating World).
         apply_threat_intents(self, t_int)
 
         # cleanup dead agent
@@ -141,9 +156,10 @@ class World:
         self.cleanup_pick_entities()
 
         # Spawn Food within time steps
-        spawn_interval = max(1, self.day_step // 10)
+        spawn_interval = self.food_spawn_interval if self.food_spawn_interval is not None else max(1, self.day_step // 10)
+        spawn_n = getattr(self, "food_spawn_n", 1)
         if self.tick % spawn_interval == 0 and self.tick != 0:
-            self.spawn_random_food(n=1, empty_cell=empty_cell, occupied=occupied)
+            self.spawn_random_food(n=spawn_n, empty_cell=empty_cell, occupied=occupied)
 
         self.record_child_states()
         self.record_mother_states()
@@ -176,6 +192,7 @@ class World:
                     break
 
     def cleanup_dead_agents(self):
+        """Unlink dead agents from their child/mother; do NOT remove from list so indices (M0,M1,M2) stay fixed."""
         dead_children = [c for c in self.children if not c.is_alive()]
         dead_mothers = [m for m in self.mothers if not m.is_alive()]
 
@@ -187,21 +204,22 @@ class World:
             if m.child is not None:
                 m.child.mother = None
 
-        self.children = [c for c in self.children if c.is_alive()]
-        self.mothers = [m for m in self.mothers if m.is_alive()]
+        # Keep lists fixed (no removal) so M0,M1,M2 and C0,C1,C2 identities stay by index
+        # self.children = [c for c in self.children if c.is_alive()]
+        # self.mothers = [m for m in self.mothers if m.is_alive()]
 
     def cleanup_pick_entities(self):
         self.foods = [f for f in self.foods if not f.collected]
 
     @property
     def has_living_agents(self):
-        return len(self.mothers) > 0 or len(self.children) > 0
+        return any(m.is_alive() for m in self.mothers) or any(c.is_alive() for c in self.children)
     
     @property
     def check_free_cell(self):
-        # avoid spawning on agents
-        occupied = {(m.x, m.y) for m in self.mothers}
-        occupied |= {(c.x, c.y) for c in self.children}
+        # avoid spawning on agents (only alive count as occupied)
+        occupied = {(m.x, m.y) for m in self.mothers if m.is_alive()}
+        occupied |= {(c.x, c.y) for c in self.children if c.is_alive()}
         occupied |= {(f.x, f.y) for f in self.foods}
 
         total_grid = self.grid_w * self.grid_h
@@ -223,6 +241,8 @@ class World:
             }
         
         for m in self.mothers:
+            if not m.is_alive():
+                continue
             h = self.mother_history[m.id]
             h["energy"].append(m.energy)
             h["fatigue"].append(m.fatigue)
@@ -267,6 +287,8 @@ class World:
 
     def record_child_states(self):
         for c in self.children:
+            if not c.is_alive():
+                continue
             h = self.child_history[c.id]
 
             h["hunger"].append(c.hunger)

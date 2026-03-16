@@ -13,13 +13,14 @@ np.random.seed(42)
 
 FLEE_HOLD_TICKS = 3
 FLEE_EXIT_DIST = 3.0   # must be safely away before leaving flee mode
+LAST_SEEN_MEMORY_TICKS = FLEE_HOLD_TICKS  # after this many steps without seeing mother, clear last_seen_mothers
 
 
 def threat_policy_propose(world):
     proposals = {}
 
     occupied_now = {(t.x, t.y) for t in world.threats}
-    threat_receive = world.mothers + world.children
+    threat_receive = [m for m in world.mothers if m.is_alive()] + [c for c in world.children if c.is_alive()]
 
     target_child = {}
     prev_pos = {t: (t.x, t.y) for t in world.threats}
@@ -45,6 +46,7 @@ def threat_policy_propose(world):
             threat.mode = "flee"
             threat.flee_timer = FLEE_HOLD_TICKS
             threat.last_seen_mothers = [(m.x, m.y) for m, _ in mothers_seen]
+            threat.last_seen_memory_timer = 0
 
             # important: clear old patrol goal so threat won't go right back into danger
             threat.patrol_goal = None
@@ -72,6 +74,13 @@ def threat_policy_propose(world):
         # Otherwise patrol
         else:
             threat.mode = "patrol"
+
+        # Time-based forget: after LAST_SEEN_MEMORY_TICKS without seeing mother, clear memory
+        if not mothers_seen and threat.last_seen_mothers:
+            threat.last_seen_memory_timer += 1
+            if threat.last_seen_memory_timer >= LAST_SEEN_MEMORY_TICKS:
+                threat.last_seen_mothers = []
+                threat.last_seen_memory_timer = 0
 
         # ----------------------------
         # 2) EXECUTE CURRENT MODE

@@ -9,17 +9,20 @@ np.random.seed(42)
 def mother_policy_propose(world):
     perception_range = 100
     proposals = {}
+    alive_mothers = [m for m in world.mothers if m.is_alive()]
+    alive_children = [c for c in world.children if c.is_alive()]
 
-    occupied_now = {(m.x, m.y) for m in world.mothers}
-    mother_receive = world.foods + world.mothers + world.children + world.threats
+    occupied_now = {(m.x, m.y) for m in alive_mothers}
+    mother_receive = world.foods + alive_mothers + alive_children + world.threats
 
     forage_modes = {}
     intended_actions = {}
 
-    prev_pos = {m: (m.x, m.y) for m in world.mothers}
+    prev_pos = {m: (m.x, m.y) for m in alive_mothers}
 
     for mother in world.mothers:
-
+        if not mother.is_alive():
+            continue
         if mother.fatigue >= 90:
             proposals[mother] = (mother.x, mother.y)
             continue
@@ -36,7 +39,7 @@ def mother_policy_propose(world):
             world, mother,  mother.selected_motivation, food_perceived
             )
         
-        print(goal, action, forage_mode)
+        # print(goal, action, forage_mode)
 
         if action is not None:
             intended_actions[mother] = action
@@ -59,8 +62,8 @@ def mother_policy_propose(world):
             proposals[mother] = (mother.x, mother.y)
             continue
 
-        blocked = {(m.x, m.y) for m in world.mothers if m is not mother}
-        blocked |= {(c.x, c.y) for c in world.children
+        blocked = {(m.x, m.y) for m in alive_mothers if m is not mother}
+        blocked |= {(c.x, c.y) for c in alive_children
                     if (c is not mother.child) and (not c.is_carried)}
         
         # block threats too 
@@ -100,12 +103,16 @@ def apply_mother_intents(world, intents):
 
     # physiology
     for mother in world.mothers:
+        if not mother.is_alive():
+            continue
         moved = (prev_pos[mother] != (mother.x, mother.y))
         action = actions.get(mother)
         acted = action is not None
         mother.update_physiology(moved=moved, acted=acted)
 
     for mother in world.mothers:
+        if not mother.is_alive():
+            continue
         child = mother.child
         if child is None:
             continue
@@ -117,9 +124,10 @@ def apply_mother_intents(world, intents):
 
     # Action
     for mother in world.mothers:
+        if not mother.is_alive():
+            continue
         action = actions.get(mother)
         child = mother.child
-
 
         if action == "care":
             if child and (mother.x, mother.y) == (child.x, child.y):
@@ -241,6 +249,79 @@ def update_plasticity(mother, action, world):
                 _clamp_plastic(w_plastic, cat, key)
 
 
+def _psych_activity_for_category(mother, cat):
+    """Return a scalar in [0,1] for 'pre' activity of this psych category (for Hebbian w)."""
+    # Map category to a relevant mother state so we have pre = state activity
+    norm = 100.0
+    if cat == "child_need":
+        if mother.child is None or not mother.child.is_alive():
+            return 0.0
+        c = mother.child
+        return (c.hunger + (50 - abs(c.warmth - 50)) + c.injury) / (norm * 2)  # rough combo
+    if cat == "ot":
+        return mother.OT / norm
+    if cat == "bonding":
+        return mother.bonding / norm
+    if cat == "cort":
+        return mother.CORT / norm
+    if cat == "stress":
+        return mother.stress / norm
+    if cat == "fear":
+        return mother.fear_threat / norm
+    return 0.5  # default
+
+
+def update_plasticity_hebbian(mother, action, world):
+    """
+    Hebbian plasticity: strengthen weights when pre and post are co-active.
+    - pre  = input activity (state/deficit feeding into the motivation).
+    - post = output activity (how strongly the selected motivation fired).
+    - Δw = η * pre * post  (only strengthen; optional decay to avoid runaway growth).
+
+    Uses same stored _last_motivation_inputs and selected_motivation as outcome-gated version.
+    """
+    if not hasattr(mother, "u_plastic"):
+        return
+    eta = getattr(mother, "eta", 0.02)
+    decay = getattr(mother, "eta_hebbian_decay", 0.01)  # optional: pull plastic back toward fixed
+    u_plastic = mother.u_plastic
+    inputs = getattr(mother, "_last_motivation_inputs", None)
+    if inputs is None:
+        return
+    M = _motivation_to_u_key(mother.selected_motivation)
+    if M is None or M not in u_plastic:
+        return
+    # Post = how strongly the selected motivation fired (normalized to [0,1])
+    post = max(0.0, min(100.0, mother.motivations.get(mother.selected_motivation, 0.0))) / 100.0
+
+    # --- Hebbian for u (motivation weights): Δw = η * pre * post ---
+    for key in u_plastic[M]:
+        pre = inputs.get(M, {}).get(key, 0.0)
+        pre = max(0.0, min(1.0, pre))  # keep in [0,1]
+        delta = eta * pre * post
+        if decay > 0 and hasattr(mother, "u_fixed"):
+            # Soft decay toward fixed: Δw -= decay * (w_plastic - w_fixed)
+            delta -= decay * (u_plastic[M][key] - mother.u_fixed[M][key])
+        u_plastic[M][key] += delta
+        # print(delta)
+        _clamp_plastic(u_plastic, M, key)
+
+    # --- Hebbian for w (psych weights): pre = state activity for that category, post = same ---
+    if hasattr(mother, "w_plastic"):
+        w_plastic = mother.w_plastic
+        categories = MOTIVATION_TO_W_CATEGORIES.get(M, [])
+        for cat in categories:
+            if cat not in w_plastic:
+                continue
+            pre = _psych_activity_for_category(mother, cat)
+            for key in w_plastic[cat]:
+                delta = eta * pre * post
+                if decay > 0 and hasattr(mother, "w_fixed") and cat in mother.w_fixed:
+                    delta -= decay * (w_plastic[cat][key] - mother.w_fixed[cat][key])
+                w_plastic[cat][key] += delta
+                _clamp_plastic(w_plastic, cat, key)
+
+
 def motivation_compute(mother):
 
     # Mother attr.
@@ -328,7 +409,7 @@ def motivation_compute(mother):
     )
     M_protect = 100.0 * (
         protect_u['child_injury'] * c_injury_def + 
-        protect_u['fear'] * m_fear + 
+        protect_u['fear'] * m_fear +
         protect_u['closeness_deficit'] * m_closeness_def +
         protect_u['bonding'] * m_bonding
     ) / protect_u_sum
@@ -356,7 +437,7 @@ def select_motivation(mother):
 
     mot_idx = np.argmax(motivation_values)
     selected = motivation_names[mot_idx]
-    print(f"Selected motivation: {selected} ({motivation_values[mot_idx]:.2f})\n")
+    # print(f"Selected motivation: {selected} ({motivation_values[mot_idx]:.2f})\n")
 
     return selected
 
@@ -429,7 +510,7 @@ def choose_goal_from_motivation(world, mother, selected, food_perceived):
 
 
     elif selected == "Self":
-        return (mother.x, mother.y), "rest", None
+        return (mother.x, mother.y), None, None
 
     return None, None, None
 

@@ -341,11 +341,11 @@ class ChildStatePlotter:
 
         plt.ion()
 
-        self.fig, self.axes = plt.subplots(1, 3, figsize=(8, 3))
+        self.fig, self.axes = plt.subplots(1, 3, figsize=(5.5, 2))
         self.axes = self.axes.flatten()
 
         manager = plt.get_current_fig_manager()
-        manager.window.wm_geometry("+880+0")
+        manager.window.wm_geometry("+1200+600")
 
         self.lines = {}
 
