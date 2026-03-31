@@ -92,8 +92,9 @@ def build_row(world, mother_slots=None, child_slots=None):
             row[pre + "fear_threat"] = m.fear_threat
             row[pre + "stress"] = m.stress
             row[pre + "closeness_child"] = m.closeness_child
-            row[pre + "OT"] = m.OT
-            row[pre + "CORT"] = m.CORT
+            # Compatibility: baseline uses oxytocin/cortisol; mother-plasticity uses OT/CORT
+            row[pre + "OT"] = getattr(m, "OT", getattr(m, "oxytocin", ""))
+            row[pre + "CORT"] = getattr(m, "CORT", getattr(m, "cortisol", ""))
             row[pre + "mot_Forage"] = m.motivations["Forage"]
             row[pre + "mot_Care"] = m.motivations["Care"]
             row[pre + "mot_Self"] = m.motivations["Self"]

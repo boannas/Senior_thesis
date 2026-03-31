@@ -3,7 +3,7 @@
 # ==================================================================================
 simulation:
   # dt: .00125
-  dt: .05
+  dt: .01
   fps: 60   # Frames per second for rendering
   seed: 42  # Random seed for reproducibility
 

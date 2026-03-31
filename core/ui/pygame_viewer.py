@@ -25,7 +25,7 @@ from func.run_logger import RunLogger
 # ─── Run Configuration ─────────────────────────────────────────────
 # Logging mode: "csv" (only CSV), "plot" (only realtime plots), "both", or None
 LOG_RUN_MODE = "csv"
-LOG_CSV_PATH = "run_log_fixed_weight.csv"
+LOG_CSV_PATH = "run_log.csv"
 SHOW_PLOTS = LOG_RUN_MODE != "csv"
 
 

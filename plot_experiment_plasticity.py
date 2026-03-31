@@ -110,37 +110,6 @@ def _eta_from_condition(df, cond):
     except (TypeError, ValueError):
         return None
 
-
-
-
-# def plot_survival_bars(df, max_tick=1000):
-#     """Bar chart: mother and child survival tick by condition (mean ± SD)."""
-#     condition_order, colors = get_condition_order_and_colors(df)
-#     n = len(condition_order)
-#     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(max(8, n * 0.8), 4))
-#     x = np.arange(n)
-#     width = max(0.35, 0.8 / n)
-
-#     for ax, metric, ylabel in [
-#         (ax1, "mother_survival_tick", "Mother survival tick"),
-#         (ax2, "child_survival_tick", "Child survival tick"),
-#     ]:
-#         means = [df[df["condition"] == c][metric].mean() for c in condition_order]
-#         sds = [df[df["condition"] == c][metric].std(ddof=1) for c in condition_order]
-#         ax.bar(x, means, width, yerr=sds, capsize=3, color=colors, edgecolor="black", linewidth=0.5)
-#         ax.set_ylabel(ylabel)
-#         ax.set_xticks(x)
-#         ax.set_xticklabels(condition_order, rotation=45, ha="right")
-#         ax.set_ylim(0, max_tick * 1.05)
-#         ax.axhline(max_tick, color="gray", linestyle="--", alpha=0.7)
-#         ax.grid(axis="y", alpha=0.3)
-#         ax.set_title(ylabel + " (higher = better)")
-
-#     fig.suptitle("Plasticity experiment: 1 mother, 1 child, 1 threat, 1000 ticks (mean ± SD)")
-#     plt.tight_layout()
-#     return fig
-
-
 def plot_survival_bars(df, max_tick=1000):
     """Bar chart: mother and child survival tick by condition (mean ± SD)."""
     condition_order, colors = get_condition_order_and_colors(df)
