@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
+from core.config.config import random_unique_positions
+from core.config.config import random_unique_positions
 from core.seed import init_seed
 init_seed(42)
 
@@ -24,13 +26,27 @@ import numpy as np
 GRID_W = 10
 GRID_H = 10
 DAY_STEP = 100
-MAX_TICKS = 1000          # 10 simulated days
-INITIAL_FOOD_COUNT = 3
+MAX_TICKS = 3000          # 10 simulated days
+INITIAL_FOOD_COUNT = 1
 
-MOTHER_START = [[1, 1]]
-CHILD_START = [[5, 5]]
+
+### [FARAO] Add randomize starting positions 
+### Should be random across random seed to get a more general sense of survival, not just one specific scenario.
+
+# MOTHER_START = [[1, 1]]
+# CHILD_START = [[5, 5]]
 THREAT_START = []          # NO threats for baseline
-FOOD_POSITIONS = [[3, 3], [7, 2], [5, 8]][:INITIAL_FOOD_COUNT]
+# FOOD_POSITIONS = [[3, 3], [7, 2], [5, 8]][:INITIAL_FOOD_COUNT]
+FOOD_POSITIONS = []
+
+occupied = set()
+
+MOTHER_START, occupied = random_unique_positions(
+    n=1, grid_w=GRID_W, grid_h=GRID_H, occupied=occupied
+)
+CHILD_START, occupied = random_unique_positions(
+    n=1, grid_w=GRID_W, grid_h=GRID_H, occupied=occupied
+)
 
 OUTPUT_DIR = Path(__file__).parent / "test_results"
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -72,7 +88,7 @@ for tick in range(MAX_TICKS):
     m = world.mothers[0] if world.mothers else None
     c = world.children[0] if world.children else None
 
-    world.step(0.05)
+    world.step(0.01)
 
     m_after = world.mothers[0] if world.mothers else None
     c_after = world.children[0] if world.children else None

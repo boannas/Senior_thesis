@@ -67,6 +67,8 @@ def mother_policy_propose(world):
             world, mother, mother.selected_motivation, food_perceived
         )
 
+        print(mother.selected_motivation, "→", goal, action, forage_mode)
+
         # If an immediate action was chosen (no movement needed)
         if action is not None:
             intended_actions[mother] = action
