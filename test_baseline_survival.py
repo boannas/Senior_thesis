@@ -12,7 +12,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.config.config import random_unique_positions
-from core.config.config import random_unique_positions
 from core.seed import init_seed
 init_seed(42)
 

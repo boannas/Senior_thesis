@@ -6,9 +6,8 @@ import random
 from func.path_finding import astar
 from core.sim.movement import best_step
 import numpy as np
-
-random.seed(42)
-np.random.seed(42)
+from core.seed import init_seed
+init_seed(42)
 
 
 FLEE_HOLD_TICKS = 3
