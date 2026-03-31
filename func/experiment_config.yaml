@@ -1,0 +1,91 @@
+# Experiment scenario config: change this file to run different setups.
+# Output files will be named: experiment_plasticity_{scenario_name}_summary.csv (and _timeseries.csv).
+# Run: python run_experiment_plasticity.py
+# Plot: python plot_experiment_plasticity.py   (uses same scenario_name to load CSV)
+
+
+# World setup
+scenario_name: baseline
+n_mothers: 1
+n_children: 1
+n_threats: 0
+n_food_initial: 0
+food_spawn_interval: 10   # null = use default (day_step // 10)
+food_spawn_n: 1
+max_tick: 1000
+n_replicates: 30
+log_timeseries_interval: 10
+
+
+
+# --- Scarcity
+# scenario_name: scacity_100
+# n_mothers: 1
+# n_children: 1
+# n_threats: 0
+# n_food_initial: 0
+# food_spawn_interval: 100
+# food_spawn_n: 1
+# max_tick: 1000
+# n_replicates: 30
+# log_timeseries_interval: 10
+
+# scenario_name: scacity_50
+# n_mothers: 1
+# n_children: 1
+# n_threats: 0
+# n_food_initial: 0
+# food_spawn_interval: 50
+# food_spawn_n: 1
+# max_tick: 1000
+# n_replicates: 30
+# log_timeseries_interval: 10
+
+# scenario_name: scacity_10
+# n_mothers: 1
+# n_children: 1
+# n_threats: 0
+# n_food_initial: 0
+# food_spawn_interval: 10
+# food_spawn_n: 1
+# max_tick: 1000
+# n_replicates: 30
+# log_timeseries_interval: 10
+
+
+# --- High Threat
+
+
+# scenario_name: high_threat_1
+# n_mothers: 1
+# n_children: 1
+# n_threats: 1
+# n_food_initial: 0
+# food_spawn_interval: null
+# food_spawn_n: 1
+# max_tick: 1000
+# n_replicates: 30
+# log_timeseries_interval: 10
+
+# scenario_name: high_threat_3
+# n_mothers: 1
+# n_children: 1
+# n_threats: 3
+# n_food_initial: 0
+# food_spawn_interval: null
+# food_spawn_n: 1
+# max_tick: 1000
+# n_replicates: 30
+# log_timeseries_interval: 10
+
+
+# scenario_name: high_threat_5
+# n_mothers: 1
+# n_children: 1
+# n_threats: 5
+# n_food_initial: 0
+# food_spawn_interval: null
+# food_spawn_n: 1
+# max_tick: 1000
+# n_replicates: 30
+# log_timeseries_interval: 10

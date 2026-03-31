@@ -67,7 +67,6 @@ def mother_policy_propose(world):
             world, mother, mother.selected_motivation, food_perceived
         )
 
-        print(mother.selected_motivation, "→", goal, action, forage_mode)
 
         # If an immediate action was chosen (no movement needed)
         if action is not None:
@@ -192,7 +191,12 @@ def apply_mother_intents(world, intents):
         elif action == "threaten":
             pass  # Placeholder for future threat confrontation mechanics
 
-    # --- Step 6: outcome-gated plasticity update (learn from results) ---
+    # --- Step 6: plasticity update (optional, controlled by world.plasticity_rule) ---
+    plasticity_rule = getattr(world, "plasticity_rule", "outcome")
+    if plasticity_rule is None:
+        return
+    if plasticity_rule != "outcome":
+        raise NotImplementedError(f"Unsupported plasticity_rule on baseline: {plasticity_rule!r}")
     for mother in world.mothers:
         update_plasticity(mother, actions.get(mother), world)
 
@@ -416,6 +420,11 @@ def compute_overall_deficit(mother):
         total += deficit_high(child.injury, IDEAL_VALUE["C_injury"]) / norm
 
     return total
+
+
+# Backwards-compatible alias (used by mother-plasticity experiments)
+def overall_deficit(mother):
+    return compute_overall_deficit(mother)
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -21,8 +21,20 @@ class World:
     plan movement → resolve collisions → apply actions → cleanup → record.
     """
 
-    def __init__(self, grid_w, grid_h, mother_starts=None, child_start=None,
-                 food_positions=None, threat_starts=None, seed=42, day_step=None):
+    def __init__(
+        self,
+        grid_w,
+        grid_h,
+        mother_starts=None,
+        child_start=None,
+        food_positions=None,
+        threat_starts=None,
+        seed=42,
+        day_step=None,
+        plasticity_rule="outcome",
+        food_spawn_interval=None,
+        food_spawn_n=1,
+    ):
         random.seed(seed)
 
         self.tick = 0
@@ -30,6 +42,9 @@ class World:
         self.grid_w = grid_w
         self.grid_h = grid_h
         self.day_step = day_step
+        self.plasticity_rule = plasticity_rule
+        self.food_spawn_interval = food_spawn_interval
+        self.food_spawn_n = food_spawn_n
 
         # 8-directional movement + stay
         self.RANDOM_MOVES = [
@@ -132,9 +147,13 @@ class World:
         self._cleanup_collected_food()
 
         # 5. Periodic food spawning
-        spawn_interval = max(1, self.day_step // 10)
+        spawn_interval = (
+            self.food_spawn_interval
+            if self.food_spawn_interval is not None
+            else max(1, self.day_step // 10)
+        )
         if self.tick % spawn_interval == 0 and self.tick != 0:
-            self._spawn_random_food(count=1, empty_count=empty_count, occupied=occupied)
+            self._spawn_random_food(count=self.food_spawn_n, empty_count=empty_count, occupied=occupied)
 
         # 6. Record history
         self._record_child_states()

@@ -508,6 +508,7 @@ class ThreatAgent(Agent):
         self.mode = "patrol"            # "patrol", "chase", or "flee"
         self.flee_timer = 0
         self.last_seen_mothers = []
+        self.last_seen_memory_timer = 0  # ticks since last saw mother; clears memory after timeout
 
     def print_state(self):
         """Print current threat state for debugging."""
