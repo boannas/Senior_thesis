@@ -12,15 +12,12 @@ Pipeline per tick:
 
 import numpy as np
 from func.path_finding import astar
+from core.agents import weighted_sum
 from core.sim.movement import in_bounds, best_step
 from core.policies.deficit import IDEAL_VALUE, deficit_abs, deficit_high, deficit_low
 
 
 # ─── Helpers ────────────────────────────────────────────────────────────
-
-def weighted_sum(weight_group, keys):
-    """Sum the weights for the given keys."""
-    return sum(weight_group[k] for k in keys)
 
 
 def food_at_cell(world, x, y):
@@ -192,6 +189,10 @@ def apply_mother_intents(world, intents):
 
         elif action == "threaten":
             pass  # Placeholder for future threat confrontation mechanics
+
+    # --- Step 6: outcome-gated plasticity update (learn from results) ---
+    for mother in world.mothers:
+        update_plasticity(mother, actions.get(mother), world)
 
 
 # ═══════════════════════════════════════════════════════════════════════

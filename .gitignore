@@ -1,1 +1,10 @@
 /env311
+
+# Never commit git internals (accidental copy)
+.git copy/
+
+# Python bytecode / caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
