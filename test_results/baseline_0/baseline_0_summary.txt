@@ -1,0 +1,12 @@
+BASELINE-0: Fixed Genetic Weights Summary
+======================================================================
+Timestamp: 2026-04-03T13:09:37.556508
+Replicates: 30
+Max ticks: 3000
+Use fixed weights: True
+
+RESULTS:
+Mother survival: 100.0%
+Child survival: 3.3%
+Mother Forage: 87.7% ± 10.9%
+Mother Care:   11.9% ± 10.8%

@@ -1,0 +1,10 @@
+BASELINE-1: Random Genetic Weights Summary
+======================================================================
+Timestamp: 2026-04-03T13:15:29.770877
+Replicates: 60
+Max ticks: 3000
+Use fixed weights: False
+
+RESULTS:
+Mother survival: 100.0%
+Child survival: 35.0%

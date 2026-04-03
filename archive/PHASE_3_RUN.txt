@@ -1,0 +1,24 @@
+PHASE 3: LOW_FEAR SWEEP
+═════════════════════
+
+WHAT VARIES:
+  γ (low_fear weight) ∈ {0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0}
+
+WHAT STAYS FIXED:
+  care_weights = [0.7, 0.7, 0.7]  (α from Phase 2)
+  child_hunger = 0.5
+  energy_deficit = 0.5
+  self, protect = 0.5 each
+  grid = 20×20, ticks = 3000
+
+EXECUTION:
+  10 gamma values × 30 replicates = 300 runs (~10 min)
+
+OUTPUT FILES:
+  test_results/baseline_0_neutral_search_phase3/
+    ├── phase_3_results.csv       (300 rows: all metrics)
+    ├── phase_3_summary.csv       (10 rows: means/stds by gamma)
+    └── phase_3_config.json       (audit trail)
+
+RUN:
+  python baseline_0_neutral_search_phase3_corrected.py

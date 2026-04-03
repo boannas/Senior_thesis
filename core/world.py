@@ -34,6 +34,8 @@ class World:
         plasticity_rule="outcome",
         food_spawn_interval=None,
         food_spawn_n=1,
+        use_fixed_weights=False,
+        baseline_weights=None,
     ):
         random.seed(seed)
 
@@ -59,7 +61,7 @@ class World:
         self.threats = []
 
         for i, (mx, my) in enumerate(mother_starts):
-            self.mothers.append(MotherAgent(mx, my, grid_w, grid_h, energy=100.0, mother_id=f"M{i}"))
+            self.mothers.append(MotherAgent(mx, my, grid_w, grid_h, energy=100.0, mother_id=f"M{i}", use_fixed_weights=use_fixed_weights, baseline_weights=baseline_weights))
 
         for i, (cx, cy) in enumerate(child_start):
             self.children.append(ChildAgent(cx, cy, grid_w, grid_h, energy=10.0, child_id=f"C{i}"))

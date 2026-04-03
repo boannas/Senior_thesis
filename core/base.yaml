@@ -8,8 +8,8 @@ simulation:
   seed: 42  # Random seed for reproducibility
 
 grid:
-  width: 10
-  height: 10  
+  width: 20
+  height: 20  
   cell_px: 30
 
 colors:

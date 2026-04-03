@@ -46,7 +46,7 @@ def mother_policy_propose(world):
     proposals : dict {mother: (target_x, target_y)}
     intents   : dict with 'prev_pos', 'forage_modes', 'intended_actions'
     """
-    perception_range = 100
+    perception_range = 8  # Bounded perception: ~8 cell octile distance (realistic search)
     proposals = {}
     occupied_now = {(m.x, m.y) for m in world.mothers}
     all_visible_entities = world.foods + world.mothers + world.children + world.threats
@@ -244,7 +244,7 @@ def compute_motivations(mother):
     motivation_forage = 100.0 * (
         mw["forage"]["child_hunger"] * child_hunger +
         mw["forage"]["energy_deficit"] * energy_deficit +
-        mw["forage"]["low_fear"] * (1.0 - fear)
+        mw["forage"]["low_fear"] * (1.0 - fear) # This makes the forage bias when the mother is not scared but also need to keep for the future adjust 
     ) / forage_sum
 
     # --- Care motivation ---

@@ -18,8 +18,8 @@ from core.seed import rng
 # ─── Movement / Action Costs ───────────────────────────────────────────
 
 MOVE_COST = {
-    "energy": -1.0,
-    "fatigue": 0.5,     # Was 2.0 — reduced to prevent fatigue lockout
+    "energy": -0.3,     # Reduced from -1.0 to make care-strategy sustainable
+    "fatigue": 0.5,
 }
 
 ACTION_COST = {
@@ -28,12 +28,12 @@ ACTION_COST = {
 }
 
 REST_RECOVERY = {
-    "energy": -0.05,    # Slight hunger when resting
+    "energy": 0.1,      # Changed from -0.05: mother recovers energy when resting
     "fatigue": -3.0,    # Active rest recovers fatigue fast
 }
 
 IDLE_RECOVERY = {
-    "energy": -0.05,    # Hunger increases when idle
+    "energy": 0.05,     # Changed from -0.05: mother recovers energy during idle (sustainability)
     "fatigue": -1.0,    # Fatigue decreases when idle
 }
 
@@ -148,7 +148,7 @@ class MotherAgent(Agent):
     - Genetic (fixed) + learned (plastic) weight system
     """
 
-    def __init__(self, x, y, grid_width, grid_height, energy, mother_id=None):
+    def __init__(self, x, y, grid_width, grid_height, energy, mother_id=None, use_fixed_weights=False, baseline_weights=None):
         super().__init__(x, y, grid_width, grid_height, energy, agent_type="mother")
         self.id = mother_id
         self.child = None               # Reference to assigned child agent
@@ -180,22 +180,58 @@ class MotherAgent(Agent):
         self.selected_motivation = "Self"
 
         # --- Genetic weights (fixed, inherited, never change) ---
-        self.psych_weights_fixed = {
-            "child_need":   {"hunger": rng.uniform(0, 1), "warmth": rng.uniform(0, 1), "injury": rng.uniform(0, 1)},
-            "oxytocin":     {"closeness_gain": rng.uniform(0, 1), "decay": rng.uniform(0, 1)},
-            "bonding":      {"oxytocin_gain": rng.uniform(0, 1), "child_need_decay": rng.uniform(0, 1), "child_absent_decay": rng.uniform(0, 1)},
-            "cortisol":     {"threat_gain": rng.uniform(0, 1), "child_need_gain": rng.uniform(0, 1), "energy_deficit_gain": rng.uniform(0, 1), "decay": rng.uniform(0, 1)},
-            "stress":       {"cortisol_gain": rng.uniform(0, 1), "fear_gain": rng.uniform(0, 1), "child_need_gain": rng.uniform(0, 1), "decay": rng.uniform(0, 1)},
-            "fear":         {"threat_gain": rng.uniform(0, 1), "decay": rng.uniform(0, 1)},
-        }
+        # Priority: baseline_weights (from BASELINE_0_WEIGHT_CONFIG) > use_fixed_weights flag > default randomization
+        if baseline_weights is not None:
+            # BASELINE-CUSTOM: Use provided weights from systematic search
+            self.psych_weights_fixed = {
+                "child_need":   {"hunger": 0.5, "warmth": 0.5, "injury": 0.5},
+                "oxytocin":     {"closeness_gain": 0.5, "decay": 0.5},
+                "bonding":      {"oxytocin_gain": 0.5, "child_need_decay": 0.5, "child_absent_decay": 0.5},
+                "cortisol":     {"threat_gain": 0.5, "child_need_gain": 0.5, "energy_deficit_gain": 0.5, "decay": 0.5},
+                "stress":       {"cortisol_gain": 0.5, "fear_gain": 0.5, "child_need_gain": 0.5, "decay": 0.5},
+                "fear":         {"threat_gain": 0.5, "decay": 0.5},
+            }
+        elif use_fixed_weights:
+            # BASELINE-0 (Controlled): All weights = 0.5 for neutrality
+            self.psych_weights_fixed = {
+                "child_need":   {"hunger": 0.5, "warmth": 0.5, "injury": 0.5},
+                "oxytocin":     {"closeness_gain": 0.5, "decay": 0.5},
+                "bonding":      {"oxytocin_gain": 0.5, "child_need_decay": 0.5, "child_absent_decay": 0.5},
+                "cortisol":     {"threat_gain": 0.5, "child_need_gain": 0.5, "energy_deficit_gain": 0.5, "decay": 0.5},
+                "stress":       {"cortisol_gain": 0.5, "fear_gain": 0.5, "child_need_gain": 0.5, "decay": 0.5},
+                "fear":         {"threat_gain": 0.5, "decay": 0.5},
+            }
+        else:
+            # BASELINE-1 (Heterogeneous): Randomized U(0,1) weights for biological diversity
+            self.psych_weights_fixed = {
+                "child_need":   {"hunger": rng.uniform(0, 1), "warmth": rng.uniform(0, 1), "injury": rng.uniform(0, 1)},
+                "oxytocin":     {"closeness_gain": rng.uniform(0, 1), "decay": rng.uniform(0, 1)},
+                "bonding":      {"oxytocin_gain": rng.uniform(0, 1), "child_need_decay": rng.uniform(0, 1), "child_absent_decay": rng.uniform(0, 1)},
+                "cortisol":     {"threat_gain": rng.uniform(0, 1), "child_need_gain": rng.uniform(0, 1), "energy_deficit_gain": rng.uniform(0, 1), "decay": rng.uniform(0, 1)},
+                "stress":       {"cortisol_gain": rng.uniform(0, 1), "fear_gain": rng.uniform(0, 1), "child_need_gain": rng.uniform(0, 1), "decay": rng.uniform(0, 1)},
+                "fear":         {"threat_gain": rng.uniform(0, 1), "decay": rng.uniform(0, 1)},
+            }
 
         # --- Motivation weights (fixed, inherited) ---
-        self.motivation_weights_fixed = {
-            "forage":   {"child_hunger": rng.uniform(0, 1), "energy_deficit": rng.uniform(0, 1), "low_fear": rng.uniform(0, 1)},
-            "care":     {"child_warmth": rng.uniform(0, 1), "closeness_deficit": rng.uniform(0, 1), "bonding": rng.uniform(0, 1)},
-            "self":     {"fatigue": rng.uniform(0, 1), "fear": rng.uniform(0, 1), "stress": rng.uniform(0, 1)},
-            "protect":  {"child_injury": rng.uniform(0, 1), "fear": rng.uniform(0, 1), "closeness_deficit": rng.uniform(0, 1), "bonding": rng.uniform(0, 1)},
-        }
+        if baseline_weights is not None:
+            # BASELINE-CUSTOM: Use provided weights from systematic search
+            self.motivation_weights_fixed = baseline_weights
+        elif use_fixed_weights:
+            # BASELINE-0 (Controlled): All weights = 0.5
+            self.motivation_weights_fixed = {
+                "forage":   {"child_hunger": 0.5, "energy_deficit": 0.5, "low_fear": 0.5},
+                "care":     {"child_warmth": 0.5, "closeness_deficit": 0.5, "bonding": 0.5},
+                "self":     {"fatigue": 0.5, "fear": 0.5, "stress": 0.5},
+                "protect":  {"child_injury": 0.5, "fear": 0.5, "closeness_deficit": 0.5, "bonding": 0.5},
+            }
+        else:
+            # BASELINE-1 (Heterogeneous): Randomized U(0,1) weights
+            self.motivation_weights_fixed = {
+                "forage":   {"child_hunger": rng.uniform(0, 1), "energy_deficit": rng.uniform(0, 1), "low_fear": rng.uniform(0, 1)},
+                "care":     {"child_warmth": rng.uniform(0, 1), "closeness_deficit": rng.uniform(0, 1), "bonding": rng.uniform(0, 1)},
+                "self":     {"fatigue": rng.uniform(0, 1), "fear": rng.uniform(0, 1), "stress": rng.uniform(0, 1)},
+                "protect":  {"child_injury": rng.uniform(0, 1), "fear": rng.uniform(0, 1), "closeness_deficit": rng.uniform(0, 1), "bonding": rng.uniform(0, 1)},
+            }
 
         # --- Plastic weights (learned, adapt via outcome-gated plasticity) ---
         self.psych_weights_plastic = copy.deepcopy(self.psych_weights_fixed)
