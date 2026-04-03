@@ -40,6 +40,7 @@ python plot_logged_run.py
 ```
 Plotting tools and baseline statistical comparisons are typically exported directly to the `plots/` directory via analytics scripts (e.g., `baseline1_distribution.png`).
 
-## Documentation
+## Documentation & Design
 For in-depth analysis of the system architecture, validation results, limits, and the methodology behind the baseline selection, please refer to the primary academic report:
-- `Experiment_Baseline_Report.md`
+- `Experiment_Baseline_Report.md` - Backgound, Assumption, Key Insight
+- `Design_Baseline_Report.md` - Design, Parameters
