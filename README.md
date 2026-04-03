@@ -1,4 +1,4 @@
-# Maternal Caregiving Instincts: README
+# Simulation of Maternal Instinct Baseline: README
 
 ## Installation & Requirements
 
