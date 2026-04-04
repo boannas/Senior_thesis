@@ -39,113 +39,119 @@ Baseline-1 requires no calibration. All motivation weights are drawn from U(0,1)
 
 ## 3. Parameter Specification
 
-### 3.1 Baseline-0 (Controlled)
+To establish a clear reference point, parameters are strictly separated into four distinct groups. For each group, we define its state under Baseline-0 (controlled) and Baseline-1 (heterogeneous) as either **fixed** (constant, identical across all runs), **tuned** (calibrated to a specific stable value), or **randomized** (drawn from a probability distribution).
 
-#### Tuned Parameters
+### 3.1 Motivation Weights
+Control the high-level decision-making priorities of the mother agent (Forage, Care, Self, Protect).
 
-These two parameters were determined through the Phase 1–3 calibration process. They define the Baseline-0 operating point.
+*   **Baseline-0 State:** **Tuned / Fixed**. Most parameters are strictly fixed at 0.50. The specific exceptions are the tuned parameters $\alpha=0.70$ (Care scale) and $\gamma=0.60$ (Forage low_fear).
+*   **Baseline-1 State:** **Randomized**. All motivation sub-weights are independently drawn from $U(0,1)$ per replicate, creating natural phenotypic diversity.
 
-| Parameter | Symbol | Value | Effect |
-|-----------|:------:|:-----:|--------|
-| Care weight scale factor | α | 0.70 | Scales all three care sub-weights (child_warmth, closeness_deficit, bonding) |
-| Forage low_fear weight | γ | 0.60 | Controls the contribution of `(1 − fear)` signal to forage motivation |
-
-#### Motivation Weights (Derived from α and γ)
-
-| Category | Sub-weight | Value | Status |
+| Category | Sub-weight | Baseline-0 | Baseline-1 |
 |----------|-----------|:-----:|:------:|
-| **Forage** | child_hunger | 0.50 | Fixed |
-| | energy_deficit | 0.50 | Fixed |
-| | low_fear | 0.60 | **Tuned** (γ) |
-| **Care** | child_warmth | 0.70 | **Tuned** (α × 1.0) |
-| | closeness_deficit | 0.70 | **Tuned** (α × 1.0) |
-| | bonding | 0.70 | **Tuned** (α × 1.0) |
-| **Self** | fatigue | 0.50 | Fixed |
-| | fear | 0.50 | Fixed |
-| | stress | 0.50 | Fixed |
-| **Protect** | child_injury | 0.50 | Fixed |
-| | fear | 0.50 | Fixed |
-| | closeness_deficit | 0.50 | Fixed |
-| | bonding | 0.50 | Fixed |
+| **Forage** | child_hunger | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | energy_deficit | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | low_fear | 0.60 (Tuned, $\gamma$) | U(0,1) (Randomized) |
+| **Care** | child_warmth | 0.70 (Tuned, $\alpha$) | U(0,1) (Randomized) |
+| | closeness_deficit | 0.70 (Tuned, $\alpha$) | U(0,1) (Randomized) |
+| | bonding | 0.70 (Tuned, $\alpha$) | U(0,1) (Randomized) |
+| **Self** | fatigue | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | fear | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | stress | 0.50 (Fixed) | U(0,1) (Randomized) |
+| **Protect** | child_injury | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | fear | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | closeness_deficit | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | bonding | 0.50 (Fixed) | U(0,1) (Randomized) |
 
-#### Fixed Environment Parameters
+### 3.2 Psychological-State Weights / Parameters
+Control how stimuli (needs, threats, deficits) update the internal psychological variables (bonding, fear, stress, oxytocin, cortisol).
 
-These parameters are locked across all baseline experiments. Modifying any of them constitutes a new experimental condition.
+*   **Baseline-0 State:** **Fixed**. Strictly locked to exactly 0.50 for all weights to ensure identical, neutral internal state progression.
+*   **Baseline-1 State:** **Randomized**. All psychological-state weights are drawn independently from $U(0,1)$, naturally coupling with the motivation diversity.
 
-| Parameter | Value | Rationale |
-|-----------|:-----:|-----------|
-| Grid size | 20 × 20 | Non-trivial search space; perception covers ~40% of diagonal |
-| Food items (initial) | 1 | Minimal resource; sufficient to sustain but not trivial |
-| Food respawn | None (static) | No periodic spawning; food remains where placed |
-| Threats | 0 | Neutral condition; isolates care–forage dynamics |
-| Perception range | 8 cells (octile distance) | Bounded awareness; mother cannot see entire grid |
-| Simulation length | 3000 ticks (30 simulated days) | Sufficient for behavioral convergence |
-| Day step | 100 ticks/day | Defines day/night cycle granularity |
+| Category | Sub-weight | Baseline-0 | Baseline-1 |
+|----------|-----------|:-----:|:------:|
+| **Child Need** | hunger | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | warmth | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | injury | 0.50 (Fixed) | U(0,1) (Randomized) |
+| **Oxytocin** | closeness_gain | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | decay | 0.50 (Fixed) | U(0,1) (Randomized) |
+| **Bonding** | oxytocin_gain | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | child_need_decay | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | child_absent_decay| 0.50 (Fixed) | U(0,1) (Randomized) |
+| **Cortisol** | threat_gain | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | child_need_gain | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | energy_deficit_gain| 0.50 (Fixed) | U(0,1) (Randomized) |
+| | decay | 0.50 (Fixed) | U(0,1) (Randomized) |
+| **Stress** | cortisol_gain | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | fear_gain | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | child_need_gain | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | decay | 0.50 (Fixed) | U(0,1) (Randomized) |
+| **Fear** | threat_gain | 0.50 (Fixed) | U(0,1) (Randomized) |
+| | decay | 0.50 (Fixed) | U(0,1) (Randomized) |
 
-#### Fixed Energy and Fatigue Dynamics
+### 3.3 Physiological Dynamics
+Govern energy consumption, fatigue accumulation, and the child's needs.
 
-| Parameter | Value | Notes |
-|-----------|:-----:|-------|
-| Move cost (energy) | −0.30 / move | Reduced from −1.0 for care-strategy viability |
-| Move cost (fatigue) | +0.50 / move | Fatigue accumulation from locomotion |
-| Idle recovery (energy) | +0.05 / tick | Enables long-term energy sustainability |
-| Idle recovery (fatigue) | −1.00 / tick | Fatigue recovery while idle |
-| Rest recovery (energy) | +0.10 / tick | Enhanced recovery during rest action |
-| Rest recovery (fatigue) | −3.00 / tick | Fast fatigue recovery during rest |
-| Action cost (energy) | −0.10 / action | Cost of feeding, caring actions |
-| Action cost (fatigue) | +0.10 / action | Fatigue from actions |
+*   **Baseline-0 State:** **Fixed**.
+*   **Baseline-1 State:** **Fixed**.
+*(Identical for both baselines to ensure baseline survival pressures remain constant.)*
 
-#### Fixed Initial Conditions
+**Mother Dynamics:**
+| Parameter | Value |
+|-----------|:-----:|
+| Move (energy/fatigue) | −0.30 / +0.50 per move |
+| Action (energy/fatigue) | −0.10 / +0.10 per action |
+| Idle recovery (energy/fatigue)| +0.05 / −1.00 per tick |
+| Rest action (energy/fatigue) | +0.10 / −3.00 per tick |
+
+**Child Dynamics:**
+| Parameter | Value |
+|-----------|:-----:|
+| Hunger increase | +0.50 / tick |
+| Warmth (carried / alone) | +0.10 / −0.20 per tick |
+
+### 3.4 Environment Parameters
+Define the physical gridworld constraints and initial conditions. 
+
+*   **Baseline-0 State:** **Fixed**.
+*   **Baseline-1 State:** **Fixed**.
 
 | Parameter | Value |
 |-----------|:-----:|
-| Mother initial energy | 100 |
-| Child initial hunger | 0 (well-fed) |
-| Child initial warmth | 50 (ideal) |
-| Child initial injury | 0 (healthy) |
-
-#### Fixed Child Dynamics
-
-| Parameter | Value |
-|-----------|:-----:|
-| Hunger increase rate | +0.50 / tick |
-| Warmth gain (carried by mother) | +0.10 / tick |
-| Warmth loss (alone) | −0.20 / tick |
-
-#### Fixed Behavioral Parameters
-
-| Parameter | Value | Notes |
-|-----------|:-----:|-------|
-| Plasticity rule | `fixed` | No weight learning during simulation |
-| Learning rate | 0.02 | Inert when plasticity = fixed |
-| Base seed | 42 | Replicates use seed = 42 + replicate_id |
+| Grid size | 20 × 20 |
+| Food items | 1 (static respawn) |
+| Threats | 0 (neutral condition) |
+| Perception range | 8 cells (octile) |
+| Simulation length | 3000 ticks (30 days) |
+| Mother init energy | 100 |
 
 ---
 
-### 3.2 Baseline-1 (Heterogeneous)
+## 4. Design Clarifications
 
-#### Randomized Parameters
+To provide full context on the baseline design decisions and methodology:
 
-All motivation sub-weights are drawn independently from a uniform distribution:
+### Why Equal Weights (0.5) Were Insufficient
+Initially, setting every motivation weight to a perfectly neutral 0.50 seemed like the most logical baseline. However, the motivation equations contain a structural asymmetry: foraging receives a constant, ambient signal from `(1 - fear)` when no threats are present. Care has no such continuous baseline signal. Due to this hidden imbalance, a "neutral" 0.50 configuration caused mothers to forage endlessly, leading to an almost 100% child mortality rate. A purely mathematical midpoint translated into a severe behavioral failure.
 
-| Category | Sub-weights | Distribution |
-|----------|------------|:------------:|
-| Forage | child_hunger, energy_deficit, low_fear | U(0, 1) |
-| Care | child_warmth, closeness_deficit, bonding | U(0, 1) |
-| Self | fatigue, fear, stress | U(0, 1) |
-| Protect | child_injury, fear, closeness_deficit, bonding | U(0, 1) |
+### Why Alpha and Gamma Were Introduced
+Because perfect 0.50 weights failed to produce a viable caregiver, scaling factors were needed to manually locate a stable reference point:
+*   **Alpha (Care Scale):** Introduced to uniformly boost the entire care motivation so the mother would actively attempt to keep her child alive.
+*   **Gamma (low_fear Scale):** Introduced to specifically throttle the extreme foraging drive caused by the `(1 - fear)` ambient signal without impacting other forage triggers like child hunger.
+Tuning these two specific parameters isolated the structural imbalance, allowing us to find a mathematically working configuration for Baseline-0.
 
-Each mother receives an independent weight draw per replicate. The seed controls reproducibility: the same seed produces the same weight draw.
+### The "Bifurcation Mechanism"
+In complex systems, a "bifurcation" describes a tipping point where a microscopic change in a parameter causes the system to violently split into completely different outcomes. In our model, when $\gamma$ was set near exactly 0.50, the survival variance exploded (e.g., $67\% \pm 43\%$). Sometimes families survived effortlessly, and sometimes they perished entirely on replicate seeds that were nearly identical. The behavior fell off a cliff between absolute stability and chaos. We refer to this tipping point as the "bifurcation mechanism," which is driven by the rigid architecture of the `argmax` action selector snapping between Care and Forage.
 
-#### Fixed Parameters
-
-**All environment and dynamics parameters are identical to Baseline-0.** The only difference is the source of motivation weights (random draw vs. fixed values). This ensures that any behavioral differences between Baseline-0 and Baseline-1 are attributable solely to genetic weight variation.
+### Phenotypes vs. Low-Level Actions
+We use phenotype distributions (categorizing agents as Foragers or Caregivers) as a high-level heuristic to interpret the agent populations. However, grouping by motivation trait is only a **first-level** behavioral interpretation — it mainly tells us *what the agent wanted to do*. A comprehensive trait analysis in future experiments should be corroborated by examining the **low-level physical actions** (e.g., exact grid cells moved, ticks spent resting, or precise energy consumed over time). Mapping these physical actions provides the ground truth of *what the agent actually did*, acting as a much stronger metric for deeper analysis.
 
 ---
 
-## 4. Results and Interpretation
+## 5. Results and Interpretation
 
-### 4.1 Baseline-0
+### 5.1 Baseline-0
 
 | Metric | Value |
 |--------|:-----:|
@@ -159,7 +165,7 @@ Each mother receives an independent weight draw per replicate. The seed controls
 > [!WARNING]
 > Do not interpret Baseline-0 as "optimal" or "the correct configuration." It is the first stable configuration above a structural tipping point and is explicitly biased toward success.
 
-### 4.2 Baseline-1
+### 5.2 Baseline-1
 
 | Metric | Value |
 |--------|:-----:|
@@ -178,9 +184,9 @@ Phenotype classification thresholds:
 
 ---
 
-## 5. Usage Guidelines for Future Experiments
+## 6. Usage Guidelines for Future Experiments
 
-### 5.1 Using Baseline-0
+### 6.1 Using Baseline-0
 
 Baseline-0 is appropriate when the experimental question is:
 
@@ -200,7 +206,7 @@ Baseline-0 is appropriate when the experimental question is:
 > [!IMPORTANT]
 > Baseline-0 performance (100% survival) will not hold under more complex conditions. This is expected. The purpose is to establish a ceiling from which degradation is measured, not to claim that the system always succeeds.
 
-### 5.2 Using Baseline-1
+### 6.2 Using Baseline-1
 
 Baseline-1 is appropriate when the experimental question is:
 
@@ -217,7 +223,7 @@ Baseline-1 is appropriate when the experimental question is:
 - Always report phenotype distribution alongside aggregate survival
 - The aggregate survival rate (35%) is less informative than the per-phenotype breakdown
 
-### 5.3 Comparative Analysis (Both Baselines)
+### 6.3 Comparative Analysis (Both Baselines)
 
 For a complete experimental evaluation, run both baselines:
 
@@ -229,7 +235,7 @@ For a complete experimental evaluation, run both baselines:
 
 ---
 
-## 6. Structural Bifurcation
+## 7. Structural Bifurcation
 
 The calibration process revealed that the motivation system exhibits a **structural tipping point** in its parameter space. This is not a failure of the calibration — it is an intrinsic property of the architecture.
 
@@ -251,12 +257,12 @@ A truly neutral baseline (50% survival, low variance) would require architectura
 
 ---
 
-## 7. Conclusion
+## 8. Conclusion
 
 | | Baseline-0 | Baseline-1 |
 |---|---|---|
 | **Type** | Controlled reference | Heterogeneous reference |
-| **Weights** | Fixed (α = 0.70, γ = 0.60) | Random U(0, 1) |
+| **Weights** | Fixed ($\alpha$ = 0.70, $\gamma$ = 0.60) | Random U(0, 1) |
 | **Behavior** | Deterministic | Stochastic, bimodal |
 | **Child survival** | 100% | ~35% |
 | **Use case** | Measure effect of single-variable changes | Test robustness across phenotypic diversity |
