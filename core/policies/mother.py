@@ -56,6 +56,11 @@ def mother_policy_propose(world):
     prev_positions = {mother: (mother.x, mother.y) for mother in world.mothers}
 
     for mother in world.mothers:
+        # Passive survival lower bound: freeze mothers (no move, no action).
+        if getattr(world, "passive_mothers", False):
+            proposals[mother] = (mother.x, mother.y)
+            continue
+
         food_perceived, _ = mother.scan_perception(
             all_visible_entities, perception_range=perception_range
         )

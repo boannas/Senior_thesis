@@ -27,13 +27,17 @@ ACTION_COST = {
     "fatigue": 0.1,
 }
 
+# Basal metabolic cost: energy decreases every tick regardless of action.
+# This prevents "free energy" while idle/resting; energy should increase only via eating.
+BASAL_METABOLIC_COST = -0.05
+
 REST_RECOVERY = {
-    "energy": 0.1,      # Changed from -0.05: mother recovers energy when resting
+    "energy": 0.0,      # Rest reduces fatigue but does not create energy
     "fatigue": -3.0,    # Active rest recovers fatigue fast
 }
 
 IDLE_RECOVERY = {
-    "energy": 0.05,     # Changed from -0.05: mother recovers energy during idle (sustainability)
+    "energy": 0.0,      # Idle does not create energy (basal metabolism still applies)
     "fatigue": -1.0,    # Fatigue decreases when idle
 }
 
@@ -284,6 +288,9 @@ class MotherAgent(Agent):
             self.alive = False
             return
 
+        # Basal metabolism applies every tick
+        self.energy += BASAL_METABOLIC_COST
+
         if moved:
             self.energy += MOVE_COST["energy"]
             self.fatigue += MOVE_COST["fatigue"]
@@ -490,14 +497,16 @@ class ChildAgent(Agent):
         self.threat_close = False
         self.nearest_threat_dist = float("inf")
 
-        # Hunger increases each tick (reduced from 1.0 for survivability)
-        self.hunger = min(100.0, self.hunger + 0.5)
+        # Hunger increases each tick.
+        # Tuned so passive (unfed) child reaches hunger=100 at ~1000 ticks.
+        self.hunger = min(100.0, self.hunger + 0.1)
 
-        # Warmth: carried = warm up, alone = cool down slowly
+        # Warmth: carried = warm up, alone = cool down slowly.
+        # Tuned slower than hunger so hunger is the primary passive failure mode.
         if self.is_carried:
             self.warmth = min(50.0, self.warmth + self.warmth_recovery_rate)
         else:
-            self.warmth = max(0.0, self.warmth - 0.2)  # Was 0.5, reduced for survivability
+            self.warmth = max(0.0, self.warmth - 0.03)
 
         # Injury: check threat proximity
         for threat in world.threats:
