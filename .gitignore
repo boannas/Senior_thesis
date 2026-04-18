@@ -8,3 +8,14 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Generated experiment outputs (regenerate with baseline runners)
+test_results/
+
+# Figures from local runs
+plots/
+
+# Local / IDE
+.cursor/
+*.log
+run_log.csv

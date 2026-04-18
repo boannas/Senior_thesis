@@ -1,46 +1,30 @@
-# Simulation of Maternal Instinct Baseline: README
+# Maternal-instuition simulation (`evolve-lineage`)
 
-## Installation & Requirements
+Minimal gridworld with mother–child–threat dynamics, internal states, motivation selection, and optional plasticity. This branch focuses on **single-lineage evolution** (genes mutate across generations; plasticity resets per life)—implementation lives alongside existing baselines.
 
-Ensure you have Python 3 installed. Required dependencies typically include:
+## Setup
+
 ```bash
 pip install numpy pandas matplotlib seaborn pygame
 ```
 
-## Usage Guide
+## Run
 
-### 1. Interactive Visual Simulation
-To launch the real-time Pygame gridworld visualization:
-```bash
-python run_gridworld.py
-```
-*(Performance logs for interactive runs are saved to `run_log.csv`)*
+| What | Command |
+|------|---------|
+| Interactive viewer | `python run_gridworld.py` |
+| Baseline 0 (fixed 0.5 weights) | `python baseline_0_runner.py` |
+| Baseline 1 (random weights) | `python baseline_1_runner.py` |
+| Passive survival lower bound | `python baseline_passive_lower_bound.py` |
 
-### 2. Running Headless Baseline Experiments
-To generate the core baseline datasets (bypassing the GUI for speed with batch replicates):
-```bash
-python baseline_0_runner.py
-python baseline_1_runner.py
-```
-*Outputs are written directly to `test_results/baseline_0/` and `test_results/baseline_1/`.*
+CSV summaries go to `test_results/` (local only; not committed).
 
-### 3. Structural Validation Scripts
-To guarantee the scientific integrity of the motivation dynamics, several isolated edge-case validators are provided:
-```bash
-python validation_case2_no_food.py       # Confirms starvation tracks properly
-python validation_case3_no_care.py       # Confirms thermal deficits track properly
-python validation_case4_stability.py     # Cross-seed reproducibility check
-python validation_case6_bifurcation.py   # Stability tests across unstable equilibrium points
-```
+## Repo layout
 
-### 4. Data Visualization & Analytics
-Plot diagnostics on single standard logged runs:
-```bash
-python plot_logged_run.py
-```
-Plotting tools and baseline statistical comparisons are typically exported directly to the `plots/` directory via analytics scripts (e.g., `baseline1_distribution.png`).
+- `core/` — world loop, agents, policies (`mother.py`, `threat.py`), movement
+- `func/` — helpers (logging, pathfinding, optional configs)
+- `archive/` — old calibration / sweep scripts (reference only)
 
-## Documentation & Design
-For in-depth analysis of the system architecture, validation results, limits, and the methodology behind the baseline selection, please refer to the primary academic report:
-- `Experiment_Baseline_Report.md` - Backgound, Assumption, Key Insight
-- `Design_Baseline_Report.md` - Design, Parameters
+## Docs
+
+- `Experiment_Baseline_Report.md`, `Design_Baseline_Report.md` — baseline methodology
