@@ -269,19 +269,13 @@ def compute_motivations(mother):
     ) / self_sum
 
     # --- Protect motivation ---
-    # Protect only activates when threats are nearby (fear > 0)
-    # Without threats, protect should be near-zero to avoid dominating peaceful behavior
-    has_threat_signal = fear > 0.01 or child_injury > 0.01
-    if has_threat_signal:
-        protect_sum = weighted_sum(mw["protect"], ['child_injury', 'fear', 'closeness_deficit', 'bonding'])
-        motivation_protect = 100.0 * (
-            mw["protect"]["child_injury"] * child_injury +
-            mw["protect"]["fear"] * fear +
-            mw["protect"]["closeness_deficit"] * closeness_deficit +
-            mw["protect"]["bonding"] * bonding
-        ) / protect_sum
-    else:
-        motivation_protect = 0.0
+    protect_sum = weighted_sum(mw["protect"], ['child_injury', 'fear', 'closeness_deficit', 'bonding'])
+    motivation_protect = 100.0 * (
+        mw["protect"]["child_injury"] * child_injury +
+        mw["protect"]["fear"] * fear +
+        mw["protect"]["closeness_deficit"] * closeness_deficit +
+        mw["protect"]["bonding"] * bonding
+    ) / protect_sum
 
     # --- Store results ---
     mother.motivations['Forage'] = clamp(motivation_forage)
