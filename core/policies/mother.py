@@ -165,7 +165,8 @@ def apply_mother_intents(world, intents):
 
         if action == "care":
             if child and (mother.x, mother.y) == (child.x, child.y):
-                child.warmth = min(50.0, child.warmth + 1.0)
+                # Config: +5 warmth per care action
+                child.warmth = min(50.0, child.warmth + 5.0)
 
         elif action == "rest":
             pass  # Mother rests (no action needed, physiology handles recovery)
@@ -173,12 +174,12 @@ def apply_mother_intents(world, intents):
         elif action == "eat":
             if mother.food_inventory > 0:
                 mother.food_inventory -= 1
-                mother.energy = min(100, mother.energy + 5)
+                mother.energy = min(100, mother.energy + 10)
             else:
                 food = food_at_cell(world, mother.x, mother.y)
                 if food is not None:
                     food.collect()
-                    mother.energy = min(100, mother.energy + 5)
+                    mother.energy = min(100, mother.energy + 10)
 
         elif action == "pick_food":
             food = food_at_cell(world, mother.x, mother.y)
@@ -191,16 +192,17 @@ def apply_mother_intents(world, intents):
                     and mother.food_inventory > 0
                     and (mother.x, mother.y) == (child.x, child.y)):
                 mother.food_inventory -= 1
-                child.hunger = max(0, child.hunger - 20)
+                # Config: -10 hunger per feed action
+                child.hunger = max(0, child.hunger - 10)
 
         elif action == "threaten":
             pass  # Placeholder for future threat confrontation mechanics
 
     # --- Step 6: plasticity update (optional, controlled by world.plasticity_rule) ---
-    plasticity_rule = getattr(world, "plasticity_rule", "outcome")
+    plasticity_rule = getattr(world, "plasticity_rule", None)
     if plasticity_rule is None:
         return
-    if plasticity_rule != "outcome":
+    if plasticity_rule not in ("outcome", "outcome_adaptive", "outcome_signed", "outcome_adaptive_signed"):
         raise NotImplementedError(f"Unsupported plasticity_rule on baseline: {plasticity_rule!r}")
     for mother in world.mothers:
         update_plasticity(mother, actions.get(mother), world)
@@ -455,7 +457,8 @@ def update_plasticity(mother, action, world):
     if not hasattr(mother, "motivation_weights_plastic"):
         return
 
-    learning_rate = getattr(mother, "learning_rate", 0.02)
+    base_lr = getattr(mother, "learning_rate", 0.02)
+    plasticity_rule = getattr(world, "plasticity_rule", "outcome")
     deficit_before = getattr(mother, "_deficit_before", None)
     if deficit_before is None:
         return
@@ -470,6 +473,25 @@ def update_plasticity(mother, action, world):
         return
 
     state_threshold = 0.25
+
+    # Adaptive Baldwin-style step size:
+    # learn more when overall deficit is high; learn less when stable/low deficit.
+    # deficit_before is a scalar sum of normalized deficits (typically O(0..few)).
+    if plasticity_rule in ("outcome_adaptive", "outcome_adaptive_signed"):
+        lr_min = getattr(mother, "learning_rate_min", 0.002)
+        lr_max = getattr(mother, "learning_rate_max", 0.05)
+        deficit_scale = getattr(mother, "learning_deficit_scale", 2.0)
+        # scale in [0,1]
+        s = max(0.0, min(1.0, float(deficit_before) / float(deficit_scale)))
+        learning_rate = lr_min + (lr_max - lr_min) * s
+    else:
+        learning_rate = base_lr
+
+    # Expose learning diagnostics for logging/plots
+    mother._last_deficit_before = float(deficit_before)
+    mother._last_deficit_after = float(deficit_after)
+    mother._last_learning_rate_eff = float(learning_rate)
+    mother._last_plasticity_rule = plasticity_rule
 
     # --- Update motivation weights (plastic) ---
     mot_plastic = mother.motivation_weights_plastic
@@ -487,12 +509,58 @@ def update_plasticity(mother, action, world):
     if hasattr(mother, "psych_weights_plastic"):
         psych_plastic = mother.psych_weights_plastic
         relevant_categories = MOTIVATION_TO_PSYCH_CATEGORIES.get(selected, [])
+
+        improved = deficit_after < deficit_before
+        worsened = deficit_after > deficit_before
+        signed = plasticity_rule in ("outcome_signed", "outcome_adaptive_signed")
+
+        # States that are "good when high" vs "bad when high"
+        GOOD_HIGH_CATEGORIES = {"oxytocin", "bonding"}
+        BAD_HIGH_CATEGORIES = {"fear", "cortisol", "stress", "child_need"}
+
+        def _delta_for_psych(category: str, key: str) -> float:
+            """
+            Signed update:
+            - For BAD-high states: on improvement -> decrease gains, increase decays.
+            - For GOOD-high states: on improvement -> increase gains, decrease decays.
+            Reverse directions on worsening.
+            Fallback: old symmetric rule if key is neither gain nor decay, or category unknown.
+            """
+            if not (improved or worsened):
+                return 0.0
+            if (category not in GOOD_HIGH_CATEGORIES) and (category not in BAD_HIGH_CATEGORIES):
+                # unknown valence: keep the original symmetric behavior
+                return learning_rate if improved else -learning_rate
+
+            is_good_high = category in GOOD_HIGH_CATEGORIES
+            is_decay = "decay" in key
+            is_gain = ("gain" in key) and not is_decay
+
+            if not (is_gain or is_decay):
+                # not a gain/decay parameter: use symmetric update
+                return learning_rate if improved else -learning_rate
+
+            # desired sign on improvement
+            if is_good_high:
+                # want state to be higher -> increase gains, decrease decays
+                sign = +1.0 if is_gain else -1.0
+            else:
+                # want state to be lower -> decrease gains, increase decays
+                sign = -1.0 if is_gain else +1.0
+
+            if worsened:
+                sign *= -1.0
+            return sign * learning_rate
+
         for category in relevant_categories:
             if category not in psych_plastic:
                 continue
             for key in psych_plastic[category]:
-                if deficit_after < deficit_before:
-                    psych_plastic[category][key] += learning_rate
-                elif deficit_after > deficit_before:
-                    psych_plastic[category][key] -= learning_rate
+                if signed:
+                    psych_plastic[category][key] += _delta_for_psych(category, key)
+                else:
+                    if improved:
+                        psych_plastic[category][key] += learning_rate
+                    elif worsened:
+                        psych_plastic[category][key] -= learning_rate
                 _clamp_plastic_weight(psych_plastic, category, key)

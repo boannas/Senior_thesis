@@ -13,9 +13,11 @@ pip install numpy pandas matplotlib seaborn pygame
 | What | Command |
 |------|---------|
 | Interactive viewer | `python run_gridworld.py` |
+| Viewer with evolved genome (after `run_evolve_lineage.py`) | `python -m core.ui.pygame_viewer --genome test_results/evolve_lineage/final_genome.json` |
 | Baseline 0 (fixed 0.5 weights) | `python baseline_0_runner.py` |
 | Baseline 1 (random weights) | `python baseline_1_runner.py` |
 | Passive survival lower bound | `python baseline_passive_lower_bound.py` |
+| Single-lineage evolution (from Baseline-0 genes) | `python run_evolve_lineage.py` |
 
 CSV summaries go to `test_results/` (local only; not committed).
 

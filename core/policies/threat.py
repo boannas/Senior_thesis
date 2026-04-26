@@ -243,7 +243,9 @@ def apply_threat_intents(world, intents):
             and (not child.is_carried)
             and (threat.x, threat.y) == (child.x, child.y)
         ):
-            child.injury += float(random.randint(5, 10))
+            # Deterministic attack damage (per tick of contact).
+            # Config: +4 injury / tick => reaches 100 from 0 in 25 ticks (0.25 day at 100 ticks/day).
+            child.injury += 4.0
 
 
 def pick_patrol_goal(world, threat, max_tries=30):

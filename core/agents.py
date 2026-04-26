@@ -29,11 +29,15 @@ ACTION_COST = {
 
 # Basal metabolic cost: energy decreases every tick regardless of action.
 # This prevents "free energy" while idle/resting; energy should increase only via eating.
-BASAL_METABOLIC_COST = -0.05
+# Config (100 ticks/day): no-food mother reaches 0 energy in ~5 days.
+# 100 energy / (5 days * 100 ticks/day) = 0.2 energy/tick
+BASAL_METABOLIC_COST = -0.2
 
 REST_RECOVERY = {
     "energy": 0.0,      # Rest reduces fatigue but does not create energy
-    "fatigue": -3.0,    # Active rest recovers fatigue fast
+    # Config (100 ticks/day): heavy fatigue clears in ~6 hours = 25 ticks
+    # 100 fatigue / 25 ticks = 4.0 fatigue/tick
+    "fatigue": -4.0,
 }
 
 IDLE_RECOVERY = {
@@ -365,8 +369,11 @@ class MotherAgent(Agent):
 
             bonding_decay = pw["bonding"]["child_need_decay"] * child_need
 
-            # Oxytocin: increases when very close to child (≥90% closeness)
-            if closeness_to_child >= 90:
+            # Oxytocin: increases when mother is within a local radius of the child.
+            # Dynamic gate: distance < 20% of map max dimension.
+            # (Equivalent to normalized_dist < 0.2, or closeness_to_child > 80.)
+            oxytocin_gate_dist = 0.2 * max(world.grid_w, world.grid_h)
+            if distance_to_child < oxytocin_gate_dist:
                 oxytocin_increase = pw["oxytocin"]["closeness_gain"] * closeness_to_child
 
             # Fear: driven by threat proximity to child
@@ -456,8 +463,12 @@ class ChildAgent(Agent):
         self.warmth = 50.0      # 0: freezing → 50: ideal → 100: overheating
         self.injury = 0.0       # 0: healthy → 100: lethal
 
-        self.threat_recovery_radius = 5.0
-        self.injury_recovery_rate = 0.1
+        # Threat proximity radius used to decide if injury can recover.
+        # Scaled to map size at runtime in update(): r = 0.2 * max(grid_w, grid_h).
+        self.threat_recovery_radius = None
+        # Injury recovery when safe (no nearby threats).
+        # Config: recover from 100 -> 0 in 2 days with 100 ticks/day => 200 ticks => 0.5 / tick.
+        self.injury_recovery_rate = 0.5
         self.warmth_recovery_rate = 0.1
 
         self.threat_close = False
@@ -487,7 +498,7 @@ class ChildAgent(Agent):
         """
         Update child's internal states each tick:
         - Hunger always increases
-        - Warmth recovers when carried, drops when alone
+        - Warmth drops naturally (care action restores warmth)
         - Injury recovers when no threats are nearby
         """
         if not self.is_alive():
@@ -497,22 +508,23 @@ class ChildAgent(Agent):
         self.threat_close = False
         self.nearest_threat_dist = float("inf")
 
-        # Hunger increases each tick.
-        # Tuned so passive (unfed) child reaches hunger=100 at ~1000 ticks.
-        self.hunger = min(100.0, self.hunger + 0.1)
+        # Hunger increases each tick (natural rule).
+        # Config: +0.5 / tick
+        self.hunger = min(100.0, self.hunger + 0.5)
 
-        # Warmth: carried = warm up, alone = cool down slowly.
-        # Tuned slower than hunger so hunger is the primary passive failure mode.
-        if self.is_carried:
-            self.warmth = min(50.0, self.warmth + self.warmth_recovery_rate)
-        else:
-            self.warmth = max(0.0, self.warmth - 0.03)
+        # Warmth decreases each tick (natural rule).
+        # Config: -0.5 / tick
+        # Note: is_carried is treated as non-thermal (visual/safety), not warmth recovery.
+        self.warmth = max(0.0, self.warmth - 0.5)
 
         # Injury: check threat proximity
+        # Dynamic recovery radius: 20% of the map max dimension (minimum 1 cell).
+        threat_recovery_radius = max(1.0, 0.2 * max(world.grid_w, world.grid_h))
+        self.threat_recovery_radius = threat_recovery_radius
         for threat in world.threats:
             dist = self.distance_to(threat.x, threat.y, metric="octile")
             self.nearest_threat_dist = min(self.nearest_threat_dist, dist)
-            if dist <= self.threat_recovery_radius:
+            if dist <= threat_recovery_radius:
                 self.threat_close = True
 
         # Recover from injury only when threats are far away
