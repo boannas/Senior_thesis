@@ -4,7 +4,7 @@ Single-lineage evolution from Baseline-0 genes (motivation weights = 0.5).
 Darwinian setup (as discussed):
 - Genome = mother's fixed motivation weights U (nested dict matching MotherAgent).
 - Psych weights W stay at 0.5 (same as baseline_weights branch in MotherAgent).
-- Plasticity runs within each episode; each new World resets plastic = copy of fixed.
+- Plasticity is OFF by default (genes only); each episode uses fixed weights only.
 - One lineage: propose Gaussian mutation on U; accept if mean fitness improves across seeds.
 
 Usage:
@@ -39,36 +39,43 @@ import numpy as np
 from core.seed import init_seed
 from core.world import World
 
-# --- Ecology (match baseline_0_runner unless you change these) ---
-GRID_W = 10
-GRID_H = 10
-NUM_MOTHERS = 1
-NUM_CHILDREN = 1
-NUM_THREATS = 1
-FOOD_AT_START = 1
-FOOD_SPAWN_INTERVAL = 30
-FOOD_SPAWN_N = 1
-DAY_STEP = 100
-MAX_TICKS = 1000
+# --- Defaults (override via CLI) ---
+DEFAULT_GRID_W = 10
+DEFAULT_GRID_H = 10
+DEFAULT_NUM_MOTHERS = 1
+DEFAULT_NUM_CHILDREN = 1
+DEFAULT_NUM_THREATS = 1
+DEFAULT_FOOD_AT_START = 0
+DEFAULT_FOOD_SPAWN_INTERVAL = 20
+DEFAULT_FOOD_SPAWN_N = 1
+DEFAULT_DAY_STEP = 100
+DEFAULT_MAX_TICKS = 1000
 
-# Evolution
-NUM_GENERATIONS = 100
-EPISODES_PER_EVAL = 10  # random seeds per fitness estimate
-MUTATION_SIGMA = 0.05
-SEED_MASTER = 42
+# Evolution defaults
+DEFAULT_NUM_GENERATIONS = 100
+DEFAULT_EPISODES_PER_EVAL = 10  # seeds per fitness estimate
+DEFAULT_MUTATION_SIGMA = 0.05
+DEFAULT_SEED_MASTER = 42
 
-# Plasticity: "outcome" = within-life learning; None = genes only
-PLASTICITY_RULE = None
+# Plasticity: always off for this script unless explicitly overridden
+DEFAULT_PLASTICITY_RULE = None
 
 # Fitness = mean(child_survival) - LAMBDA_INJURY * mean(final child injury normalized)
 LAMBDA_INJURY = 0.002
 
-OUTPUT_DIR = "test_results/evolve_lineage"
+DEFAULT_OUTPUT_DIR = "test_results/evolve_lineage"
+
+# Fitness modes:
+# - "binary_child": 1 if child alive at end, else 0 (original behavior)
+# - "ttd_child": normalized child time-to-death in [0,1]
+# - "ttd_overall": weighted normalized time-to-death (child + mother)
+DEFAULT_FITNESS_MODE = "ttd_overall"
+DEFAULT_ALPHA_CHILD = 0.7
 
 
-def episode_seeds(generation: int) -> list[int]:
+def episode_seeds(generation: int, *, seed_master: int, episodes_per_eval: int) -> list[int]:
     """Fixed evaluation seeds for a generation (same as fitness eval)."""
-    return [SEED_MASTER * 1000 + generation * 100 + i for i in range(EPISODES_PER_EVAL)]
+    return [seed_master * 1000 + generation * 100 + i for i in range(episodes_per_eval)]
 
 
 def baseline_zero_motivation_genome() -> dict:
@@ -112,32 +119,42 @@ def mutate_genome(genome: dict, rng: np.random.RandomState, sigma: float) -> dic
     return out
 
 
-def run_episode(seed: int, motivation_genome: dict) -> dict:
-    """One rollout; returns child_survival (0/1), final injury, motivation counts."""
+def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
+    """One rollout; returns survival/time-to-death signals and motivation counts."""
     init_seed(seed)
     rng = np.random.RandomState(seed)
 
-    mother_starts = [(rng.randint(0, GRID_W), rng.randint(0, GRID_H)) for _ in range(NUM_MOTHERS)]
-    child_start = [(rng.randint(0, GRID_W), rng.randint(0, GRID_H)) for _ in range(NUM_CHILDREN)]
+    grid_w = int(cfg["grid_w"])
+    grid_h = int(cfg["grid_h"])
+    num_mothers = int(cfg["num_mothers"])
+    num_children = int(cfg["num_children"])
+    num_threats = int(cfg["num_threats"])
+    food_at_start = int(cfg["food_at_start"])
+    max_ticks = int(cfg["max_ticks"])
+
+    mother_starts = [(rng.randint(0, grid_w), rng.randint(0, grid_h)) for _ in range(num_mothers)]
+    child_start = [(rng.randint(0, grid_w), rng.randint(0, grid_h)) for _ in range(num_children)]
     food_positions = [
-        (rng.randint(0, GRID_W), rng.randint(0, GRID_H)) for _ in range(FOOD_AT_START)
+        (rng.randint(0, grid_w), rng.randint(0, grid_h)) for _ in range(food_at_start)
     ]
     threat_starts = [
-        (rng.randint(0, GRID_W), rng.randint(0, GRID_H)) for _ in range(NUM_THREATS)
+        (rng.randint(0, grid_w), rng.randint(0, grid_h)) for _ in range(num_threats)
     ]
 
     world = World(
-        grid_w=GRID_W,
-        grid_h=GRID_H,
+        grid_w=grid_w,
+        grid_h=grid_h,
         mother_starts=mother_starts,
         child_start=child_start,
         food_positions=food_positions,
         threat_starts=threat_starts,
         seed=seed,
-        day_step=DAY_STEP,
-        plasticity_rule=PLASTICITY_RULE,
-        food_spawn_interval=FOOD_SPAWN_INTERVAL,
-        food_spawn_n=FOOD_SPAWN_N,
+        day_step=int(cfg["day_step"]),
+        # Plasticity OFF unless overridden; also freeze w updates explicitly.
+        plasticity_rule=cfg.get("plasticity_rule", None),
+        plasticity_learn_w=False,
+        food_spawn_interval=cfg.get("food_spawn_interval", None),
+        food_spawn_n=int(cfg.get("food_spawn_n", 1)),
         use_fixed_weights=True,
         baseline_weights=copy.deepcopy(motivation_genome),
     )
@@ -146,41 +163,86 @@ def run_episode(seed: int, motivation_genome: dict) -> dict:
     child = world.children[0]
     mot_counts = {"Forage": 0, "Care": 0, "Self": 0, "Protect": 0}
 
-    for _ in range(MAX_TICKS):
+    child_death_tick = None
+    mother_death_tick = None
+
+    for tick in range(max_ticks):
         world.step()
         if mother and mother.is_alive():
             sel = getattr(mother, "selected_motivation", None)
             if sel in mot_counts:
                 mot_counts[sel] += 1
 
+        # record first death times (if any)
+        if child_death_tick is None and (not child or not child.is_alive()):
+            child_death_tick = tick
+        if mother_death_tick is None and (not mother or not mother.is_alive()):
+            mother_death_tick = tick
+        if (child_death_tick is not None) and (mother_death_tick is not None):
+            break
+
     child_alive = bool(child and child.is_alive())
     injury = float(child.injury) if child else 100.0
+    # right-censor at max_ticks if still alive
+    if child_death_tick is None:
+        child_death_tick = max_ticks
+    if mother_death_tick is None:
+        mother_death_tick = max_ticks
+
+    child_ttd_norm = float(child_death_tick) / float(max_ticks) if max_ticks > 0 else 0.0
+    mother_ttd_norm = float(mother_death_tick) / float(max_ticks) if max_ticks > 0 else 0.0
     return {
         "child_survival": 1.0 if child_alive else 0.0,
         "child_injury": injury,
+        "child_death_tick": int(child_death_tick),
+        "mother_death_tick": int(mother_death_tick),
+        "child_ttd_norm": float(child_ttd_norm),
+        "mother_ttd_norm": float(mother_ttd_norm),
         "mot_counts": mot_counts,
     }
 
 
-def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.RandomState) -> tuple[float, dict]:
+def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.RandomState, cfg: dict) -> tuple[float, dict]:
     """Mean fitness and summary stats."""
     surv = []
     inj = []
+    child_ttd = []
+    mother_ttd = []
     for s in seeds:
-        r = run_episode(s, motivation_genome)
+        r = run_episode(s, motivation_genome, cfg)
         surv.append(r["child_survival"])
         inj.append(r["child_injury"])
+        child_ttd.append(r["child_ttd_norm"])
+        mother_ttd.append(r["mother_ttd_norm"])
     mean_surv = float(np.mean(surv))
     mean_inj = float(np.mean(inj))
-    fitness = mean_surv - LAMBDA_INJURY * mean_inj
+    mean_child_ttd = float(np.mean(child_ttd)) if child_ttd else 0.0
+    mean_mother_ttd = float(np.mean(mother_ttd)) if mother_ttd else 0.0
+
+    fitness_mode = str(cfg.get("fitness_mode", DEFAULT_FITNESS_MODE))
+    alpha_child = float(cfg.get("alpha_child", DEFAULT_ALPHA_CHILD))
+    alpha_child = max(0.0, min(1.0, alpha_child))
+
+    if fitness_mode == "binary_child":
+        base = mean_surv
+    elif fitness_mode == "ttd_child":
+        base = mean_child_ttd
+    elif fitness_mode == "ttd_overall":
+        base = alpha_child * mean_child_ttd + (1.0 - alpha_child) * mean_mother_ttd
+    else:
+        raise ValueError(f"Unknown fitness_mode: {fitness_mode!r}")
+
+    fitness = float(base) - float(LAMBDA_INJURY) * mean_inj
     return fitness, {
         "mean_child_survival": mean_surv,
+        "mean_child_ttd_norm": mean_child_ttd,
+        "mean_mother_ttd_norm": mean_mother_ttd,
         "mean_child_injury": mean_inj,
         "std_child_survival": float(np.std(surv)),
     }
 
 
-def build_watch_episode_payload(preview_seed: int, motivation_genome: dict) -> dict:
+def build_watch_episode_payload(preview_seed: int, motivation_genome: dict, cfg: dict) -> dict:
     """
     Same layout and rules as run_episode / fitness eval, for Pygame --episode.
     JSON-serializable (nested lists for positions).
@@ -188,27 +250,35 @@ def build_watch_episode_payload(preview_seed: int, motivation_genome: dict) -> d
     init_seed(preview_seed)
     rng = np.random.RandomState(preview_seed)
 
-    mother_starts = [(rng.randint(0, GRID_W), rng.randint(0, GRID_H)) for _ in range(NUM_MOTHERS)]
-    child_start = [(rng.randint(0, GRID_W), rng.randint(0, GRID_H)) for _ in range(NUM_CHILDREN)]
+    grid_w = int(cfg["grid_w"])
+    grid_h = int(cfg["grid_h"])
+    num_mothers = int(cfg["num_mothers"])
+    num_children = int(cfg["num_children"])
+    num_threats = int(cfg["num_threats"])
+    food_at_start = int(cfg["food_at_start"])
+
+    mother_starts = [(rng.randint(0, grid_w), rng.randint(0, grid_h)) for _ in range(num_mothers)]
+    child_start = [(rng.randint(0, grid_w), rng.randint(0, grid_h)) for _ in range(num_children)]
     food_positions = [
-        (rng.randint(0, GRID_W), rng.randint(0, GRID_H)) for _ in range(FOOD_AT_START)
+        (rng.randint(0, grid_w), rng.randint(0, grid_h)) for _ in range(food_at_start)
     ]
     threat_starts = [
-        (rng.randint(0, GRID_W), rng.randint(0, GRID_H)) for _ in range(NUM_THREATS)
+        (rng.randint(0, grid_w), rng.randint(0, grid_h)) for _ in range(num_threats)
     ]
 
     world = {
-        "grid_w": GRID_W,
-        "grid_h": GRID_H,
+        "grid_w": grid_w,
+        "grid_h": grid_h,
         "mother_starts": [list(t) for t in mother_starts],
         "child_start": [list(t) for t in child_start],
         "food_positions": [list(t) for t in food_positions],
         "threat_starts": [list(t) for t in threat_starts],
         "seed": preview_seed,
-        "day_step": DAY_STEP,
-        "plasticity_rule": PLASTICITY_RULE,
-        "food_spawn_interval": FOOD_SPAWN_INTERVAL,
-        "food_spawn_n": FOOD_SPAWN_N,
+        "day_step": int(cfg["day_step"]),
+        "plasticity_rule": cfg.get("plasticity_rule", None),
+        "plasticity_learn_w": False,
+        "food_spawn_interval": cfg.get("food_spawn_interval", None),
+        "food_spawn_n": int(cfg.get("food_spawn_n", 1)),
         "use_fixed_weights": True,
         "baseline_weights": copy.deepcopy(motivation_genome),
     }
@@ -256,9 +326,9 @@ def resolve_genome_json_for_viz(json_path: str) -> str | None:
     return json_path
 
 
-def _write_watch_episode_file(payload: dict) -> str:
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    path = os.path.join(OUTPUT_DIR, "_watch_episode.json")
+def _write_watch_episode_file(payload: dict, output_dir: str) -> str:
+    os.makedirs(output_dir, exist_ok=True)
+    path = os.path.join(output_dir, "_watch_episode.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
     return path
@@ -291,27 +361,55 @@ def launch_pygame_visualizer(
         return
     with open(resolved, encoding="utf-8") as f:
         genome = json.load(f)
-    seed = episode_seeds(0)[0] if preview_seed is None else preview_seed
-    payload = build_watch_episode_payload(seed, genome)
-    ep_path = _write_watch_episode_file(payload)
+    # Fallback config for viz-only (keeps original defaults).
+    cfg = _default_cfg()
+    seed = episode_seeds(0, seed_master=cfg["seed_master"], episodes_per_eval=cfg["episodes_per_eval"])[0] if preview_seed is None else preview_seed
+    payload = build_watch_episode_payload(seed, genome, cfg)
+    ep_path = _write_watch_episode_file(payload, os.path.dirname(json_path))
     launch_pygame_episode(ep_path, title=title or "Evolved genome (eval-matched episode)")
 
 
-def main(open_viz_after: bool = False, watch_every: int = 0):
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    rng = np.random.RandomState(SEED_MASTER)
+def _default_cfg() -> dict:
+    return {
+        "grid_w": DEFAULT_GRID_W,
+        "grid_h": DEFAULT_GRID_H,
+        "num_mothers": DEFAULT_NUM_MOTHERS,
+        "num_children": DEFAULT_NUM_CHILDREN,
+        "num_threats": DEFAULT_NUM_THREATS,
+        "food_at_start": DEFAULT_FOOD_AT_START,
+        "food_spawn_interval": DEFAULT_FOOD_SPAWN_INTERVAL,
+        "food_spawn_n": DEFAULT_FOOD_SPAWN_N,
+        "day_step": DEFAULT_DAY_STEP,
+        "max_ticks": DEFAULT_MAX_TICKS,
+        "num_generations": DEFAULT_NUM_GENERATIONS,
+        "episodes_per_eval": DEFAULT_EPISODES_PER_EVAL,
+        "mutation_sigma": DEFAULT_MUTATION_SIGMA,
+        "seed_master": DEFAULT_SEED_MASTER,
+        "plasticity_rule": DEFAULT_PLASTICITY_RULE,
+        "fitness_mode": DEFAULT_FITNESS_MODE,
+        "alpha_child": DEFAULT_ALPHA_CHILD,
+        "output_dir": DEFAULT_OUTPUT_DIR,
+    }
+
+
+def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
+    output_dir = str(cfg["output_dir"])
+    os.makedirs(output_dir, exist_ok=True)
+    rng = np.random.RandomState(int(cfg["seed_master"]))
 
     genome = baseline_zero_motivation_genome()
     gen_id = 0
 
-    seeds0 = episode_seeds(0)
-    fit, stats0 = evaluate_genome(genome, seeds0, rng)
+    seeds0 = episode_seeds(0, seed_master=int(cfg["seed_master"]), episodes_per_eval=int(cfg["episodes_per_eval"]))
+    fit, stats0 = evaluate_genome(genome, seeds0, rng, cfg)
     rows = [
         {
             "generation": gen_id,
             "fitness": fit,
             "accepted": True,
             "mean_child_survival": stats0["mean_child_survival"],
+            "mean_child_ttd_norm": stats0.get("mean_child_ttd_norm", np.nan),
+            "mean_mother_ttd_norm": stats0.get("mean_mother_ttd_norm", np.nan),
             "mean_child_injury": stats0["mean_child_injury"],
             "std_child_survival": stats0["std_child_survival"],
             "mutation_sigma": 0.0,
@@ -321,23 +419,47 @@ def main(open_viz_after: bool = False, watch_every: int = 0):
 
     best_genome = copy.deepcopy(genome)
     best_fit = fit
+    best_gen = 0
+
+    def _write_checkpoint(gen_id_: int, best_fit_: float, best_genome_: dict) -> None:
+        ck_dir = os.path.join(output_dir, "checkpoints")
+        os.makedirs(ck_dir, exist_ok=True)
+        tag = f"gen{gen_id_:04d}"
+        ck_json = os.path.join(ck_dir, f"best_{tag}.json")
+        ck_txt = os.path.join(ck_dir, f"best_{tag}.txt")
+        with open(ck_json, "w", encoding="utf-8") as f:
+            json.dump(best_genome_, f, indent=2)
+        with open(ck_txt, "w", encoding="utf-8") as f:
+            f.write(f"# checkpoint {datetime.now().isoformat()}\n")
+            f.write(f"generation={gen_id_}\n")
+            f.write(f"best_fitness={best_fit_}\n")
+            f.write(f"fitness_mode={cfg.get('fitness_mode')!r}\n")
+            f.write(f"alpha_child={cfg.get('alpha_child')!r}\n")
+            f.write(f"plasticity_rule={cfg.get('plasticity_rule', None)!r}\n")
+            f.write(repr(best_genome_))
+            f.write("\n")
 
     if watch_every > 0 and gen_id % watch_every == 0:
-        ep = build_watch_episode_payload(episode_seeds(0)[0], best_genome)
-        ep_path = _write_watch_episode_file(ep)
+        ep = build_watch_episode_payload(seeds0[0], best_genome, cfg)
+        ep_path = _write_watch_episode_file(ep, output_dir)
         launch_pygame_episode(
             ep_path,
             title=f"Evolve watch — generation {gen_id} (close window to continue)",
         )
 
-    for gen_id in range(1, NUM_GENERATIONS + 1):
-        candidate = mutate_genome(best_genome, rng, MUTATION_SIGMA)
-        seeds = episode_seeds(gen_id)
-        fit_c, stats_c = evaluate_genome(candidate, seeds, rng)
+    checkpoint_every = int(cfg.get("checkpoint_every", 0) or 0)
+    if checkpoint_every > 0 and gen_id % checkpoint_every == 0:
+        _write_checkpoint(gen_id, best_fit, best_genome)
+
+    for gen_id in range(1, int(cfg["num_generations"]) + 1):
+        candidate = mutate_genome(best_genome, rng, float(cfg["mutation_sigma"]))
+        seeds = episode_seeds(gen_id, seed_master=int(cfg["seed_master"]), episodes_per_eval=int(cfg["episodes_per_eval"]))
+        fit_c, stats_c = evaluate_genome(candidate, seeds, rng, cfg)
         accepted = fit_c >= best_fit
         if accepted:
             best_fit = fit_c
             best_genome = candidate
+            best_gen = gen_id
             print(
                 f"[gen {gen_id}] ACCEPT fitness={fit_c:.4f} mean_surv={stats_c['mean_child_survival']:.3f}"
             )
@@ -352,35 +474,42 @@ def main(open_viz_after: bool = False, watch_every: int = 0):
                 "fitness": fit_c,
                 "accepted": accepted,
                 "mean_child_survival": stats_c["mean_child_survival"],
+                "mean_child_ttd_norm": stats_c.get("mean_child_ttd_norm", np.nan),
+                "mean_mother_ttd_norm": stats_c.get("mean_mother_ttd_norm", np.nan),
                 "mean_child_injury": stats_c["mean_child_injury"],
                 "std_child_survival": stats_c["std_child_survival"],
-                "mutation_sigma": MUTATION_SIGMA,
+                "mutation_sigma": float(cfg["mutation_sigma"]),
             }
         )
 
         if watch_every > 0 and gen_id % watch_every == 0:
-            ep = build_watch_episode_payload(episode_seeds(gen_id)[0], best_genome)
-            ep_path = _write_watch_episode_file(ep)
+            ep = build_watch_episode_payload(seeds[0], best_genome, cfg)
+            ep_path = _write_watch_episode_file(ep, output_dir)
             launch_pygame_episode(
                 ep_path,
                 title=f"Evolve watch — generation {gen_id} (close window to continue)",
             )
 
-    csv_path = os.path.join(OUTPUT_DIR, "lineage_generations.csv")
+        if checkpoint_every > 0 and gen_id % checkpoint_every == 0:
+            _write_checkpoint(gen_id, best_fit, best_genome)
+
+    csv_path = os.path.join(output_dir, "lineage_generations.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
         w.writeheader()
         w.writerows(rows)
 
     # Save final genome as text summary
-    summary_path = os.path.join(OUTPUT_DIR, "final_genome.txt")
+    summary_path = os.path.join(output_dir, "final_genome.txt")
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write(f"# evolve_lineage run {datetime.now().isoformat()}\n")
+        f.write(f"# plasticity_rule={cfg.get('plasticity_rule', None)!r} (expected None for genes-only)\n")
+        f.write(f"# best_generation={best_gen}\n")
         f.write(f"best_fitness={best_fit}\n")
         f.write(repr(best_genome))
         f.write("\n")
 
-    json_path = os.path.join(OUTPUT_DIR, "final_genome.json")
+    json_path = os.path.join(output_dir, "final_genome.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(best_genome, f, indent=2)
 
@@ -388,18 +517,18 @@ def main(open_viz_after: bool = False, watch_every: int = 0):
     print(f"Wrote {summary_path}")
     print(f"Wrote {json_path}")
 
-    _plot_lineage(rows, OUTPUT_DIR)
+    _plot_lineage(rows, output_dir)
 
     if open_viz_after:
         launch_pygame_visualizer(
             json_path,
-            preview_seed=episode_seeds(NUM_GENERATIONS)[0],
+            preview_seed=episode_seeds(int(cfg["num_generations"]), seed_master=int(cfg["seed_master"]), episodes_per_eval=int(cfg["episodes_per_eval"]))[0],
             title="Evolve finished — best genome (close window to exit)",
         )
 
 
 def _plot_lineage(rows: list[dict], output_dir: str) -> None:
-    """Save fitness / survival vs generation; mark accepted mutations."""
+    """Save evolution traces vs generation; mark accepted mutations."""
     try:
         import matplotlib
 
@@ -411,8 +540,22 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
 
     gens = [int(r["generation"]) for r in rows]
     fitness = [float(r["fitness"]) for r in rows]
-    surv = [float(r["mean_child_survival"]) for r in rows]
     acc = [bool(r.get("accepted", True)) for r in rows]
+
+    # Optional traces depending on fitness mode / available columns
+    def _col(name: str):
+        vals = []
+        ok = True
+        for r in rows:
+            if name not in r:
+                ok = False
+                break
+            vals.append(r[name])
+        return ok, vals
+
+    has_surv, surv = _col("mean_child_survival")
+    has_cttd, cttd = _col("mean_child_ttd_norm")
+    has_mttd, mttd = _col("mean_mother_ttd_norm")
 
     best_so_far = []
     b = -1e9
@@ -420,7 +563,11 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
         b = max(b, f)
         best_so_far.append(b)
 
-    fig, axes = plt.subplots(2, 1, figsize=(9, 6), sharex=True)
+    # 3 panels when TTD available; otherwise fall back to 2 panels.
+    n_panels = 3 if (has_cttd or has_mttd) else 2
+    fig, axes = plt.subplots(n_panels, 1, figsize=(9, 3.2 * n_panels), sharex=True)
+    if n_panels == 1:
+        axes = [axes]
 
     ax0 = axes[0]
     ax0.plot(gens, fitness, "o-", color="steelblue", alpha=0.85, label="evaluated fitness", markersize=4)
@@ -434,12 +581,35 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
     ax0.set_title("Single-lineage evolution (motivation genome)")
 
     ax1 = axes[1]
-    ax1.plot(gens, surv, "s-", color="coral", alpha=0.85, markersize=4, label="mean child survival (eval batch)")
-    ax1.set_xlabel("Generation")
-    ax1.set_ylabel("Mean child survival")
-    ax1.set_ylim(-0.05, 1.05)
-    ax1.legend(loc="lower right", fontsize=8)
-    ax1.grid(True, alpha=0.3)
+    if has_cttd or has_mttd:
+        # Prefer TTD traces (dense signal)
+        if has_cttd:
+            ax1.plot(gens, [float(x) for x in cttd], "s-", color="tab:orange", alpha=0.9, markersize=4, label="mean child TTD (norm)")
+        if has_mttd:
+            ax1.plot(gens, [float(x) for x in mttd], "D-", color="tab:purple", alpha=0.85, markersize=3.5, label="mean mother TTD (norm)")
+        ax1.set_ylabel("Mean TTD (0..1)")
+        ax1.set_ylim(-0.05, 1.05)
+        ax1.legend(loc="lower right", fontsize=8)
+        ax1.grid(True, alpha=0.3)
+        if has_surv and n_panels >= 3:
+            ax2 = axes[2]
+            ax2.plot(gens, [float(x) for x in surv], "^-", color="coral", alpha=0.85, markersize=4, label="mean child survival (binary)")
+            ax2.set_xlabel("Generation")
+            ax2.set_ylabel("Mean survival")
+            ax2.set_ylim(-0.05, 1.05)
+            ax2.legend(loc="lower right", fontsize=8)
+            ax2.grid(True, alpha=0.3)
+        else:
+            ax1.set_xlabel("Generation")
+    else:
+        # Legacy binary survival panel
+        if has_surv:
+            ax1.plot(gens, [float(x) for x in surv], "s-", color="coral", alpha=0.85, markersize=4, label="mean child survival (eval batch)")
+        ax1.set_xlabel("Generation")
+        ax1.set_ylabel("Mean child survival")
+        ax1.set_ylim(-0.05, 1.05)
+        ax1.legend(loc="lower right", fontsize=8)
+        ax1.grid(True, alpha=0.3)
 
     fig.tight_layout()
     out_png = os.path.join(output_dir, "lineage_plot.png")
@@ -450,6 +620,35 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
 
 def _parse_args():
     p = argparse.ArgumentParser(description="Single-lineage evolution of motivation weights.")
+    p.add_argument("--generations", type=int, default=DEFAULT_NUM_GENERATIONS, help="Number of generations.")
+    p.add_argument("--episodes", type=int, default=DEFAULT_EPISODES_PER_EVAL, help="Episodes (seeds) per fitness evaluation.")
+    p.add_argument("--sigma", type=float, default=DEFAULT_MUTATION_SIGMA, help="Gaussian mutation sigma for motivation weights.")
+    p.add_argument("--seed-master", type=int, default=DEFAULT_SEED_MASTER, help="Master seed for deterministic evaluation batches.")
+    p.add_argument("--max-ticks", type=int, default=DEFAULT_MAX_TICKS, help="Max ticks per episode.")
+    p.add_argument("--threats", type=int, default=DEFAULT_NUM_THREATS, help="Number of threats.")
+    p.add_argument("--food-start", type=int, default=DEFAULT_FOOD_AT_START, help="Food placed at start.")
+    p.add_argument("--food-spawn-interval", type=int, default=DEFAULT_FOOD_SPAWN_INTERVAL, help="Food spawn interval.")
+    p.add_argument("--food-spawn-n", type=int, default=DEFAULT_FOOD_SPAWN_N, help="Food spawned each interval.")
+    p.add_argument(
+        "--fitness-mode",
+        choices=["binary_child", "ttd_child", "ttd_overall"],
+        default=DEFAULT_FITNESS_MODE,
+        help="Fitness target. Default ttd_overall = weighted (child+mother) normalized time-to-death.",
+    )
+    p.add_argument(
+        "--alpha-child",
+        type=float,
+        default=DEFAULT_ALPHA_CHILD,
+        help="Weight on child in ttd_overall fitness (0..1). Example 0.7 = 70% child, 30% mother.",
+    )
+    p.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Write best-genome checkpoints every N generations into output_dir/checkpoints/. 0 = off.",
+    )
+    p.add_argument("--output-dir", type=str, default=DEFAULT_OUTPUT_DIR, help="Output directory under test_results/.")
     p.add_argument(
         "--viz",
         action="store_true",
@@ -480,7 +679,27 @@ def _parse_args():
 if __name__ == "__main__":
     args = _parse_args()
     if args.viz_only:
-        json_path = os.path.join(OUTPUT_DIR, "final_genome.json")
+        json_path = os.path.join(args.output_dir, "final_genome.json")
         launch_pygame_visualizer(json_path)
     else:
-        main(open_viz_after=args.viz, watch_every=args.watch_every)
+        cfg = _default_cfg()
+        cfg.update(
+            {
+                "num_generations": int(args.generations),
+                "episodes_per_eval": int(args.episodes),
+                "mutation_sigma": float(args.sigma),
+                "seed_master": int(args.seed_master),
+                "max_ticks": int(args.max_ticks),
+                "num_threats": int(args.threats),
+                "food_at_start": int(args.food_start),
+                "food_spawn_interval": int(args.food_spawn_interval),
+                "food_spawn_n": int(args.food_spawn_n),
+                "output_dir": str(args.output_dir),
+                "fitness_mode": str(args.fitness_mode),
+                "alpha_child": float(args.alpha_child),
+                "checkpoint_every": int(args.checkpoint_every),
+                # keep plasticity OFF
+                "plasticity_rule": None,
+            }
+        )
+        main(cfg, open_viz_after=args.viz, watch_every=args.watch_every)

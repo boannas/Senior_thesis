@@ -25,6 +25,7 @@ import os
 import csv
 import argparse
 import numpy as np
+import json
 from datetime import datetime
 
 from core.world import World
@@ -44,8 +45,8 @@ DEFAULT_NUM_CHILDREN = 1
 DEFAULT_NUM_THREATS = 0
 
 DEFAULT_FOOD_AT_START = 0
-DEFAULT_FOOD_SPAWN_INTERVAL = None
-DEFAULT_FOOD_SPAWN_N = 0
+DEFAULT_FOOD_SPAWN_INTERVAL = 20
+DEFAULT_FOOD_SPAWN_N = 1
 
 DEFAULT_DAY_STEP = 100
 DEFAULT_SEED_BASE = 1000
@@ -103,7 +104,12 @@ def run_single_replicate(
     day_step: int,
     passive_mothers: bool,
     plasticity_rule,
+    plasticity_deficit_signal: str,
+    plasticity_learn_w: bool,
+    plasticity_update_mode: str,
+    plasticity_segment_kmax: int,
     use_fixed_weights: bool,
+    baseline_weights: dict | None,
     output_dir: str,
     log_timeseries: bool,
     log_every_n_ticks: int,
@@ -127,9 +133,14 @@ def run_single_replicate(
         seed=seed,
         day_step=day_step,
         plasticity_rule=plasticity_rule,
+        plasticity_deficit_signal=plasticity_deficit_signal,
+        plasticity_learn_w=plasticity_learn_w,
+        plasticity_update_mode=plasticity_update_mode,
+        plasticity_segment_kmax=plasticity_segment_kmax,
         food_spawn_interval=food_spawn_interval,
         food_spawn_n=food_spawn_n,
         use_fixed_weights=use_fixed_weights,
+        baseline_weights=baseline_weights,
     )
     # Optionally force mothers to take no movement and no actions.
     world.passive_mothers = bool(passive_mothers)
@@ -185,6 +196,10 @@ def run_single_replicate(
                 "deficit_after": float(getattr(mother, "_last_deficit_after", np.nan)) if mother is not None else np.nan,
                 "learning_rate_eff": float(getattr(mother, "_last_learning_rate_eff", np.nan)) if mother is not None else np.nan,
                 "plasticity_rule": getattr(mother, "_last_plasticity_rule", None) if mother is not None else None,
+                "plasticity_deficit_signal": getattr(world, "plasticity_deficit_signal", None),
+                "plasticity_learn_w": int(bool(getattr(world, "plasticity_learn_w", True))),
+                "plasticity_update_mode": getattr(world, "plasticity_update_mode", None),
+                "plasticity_segment_kmax": int(getattr(world, "plasticity_segment_kmax", -1)),
                 # Weight drift (mean |plastic-fixed|)
                 "u_drift": _mean_abs_diff_nested(getattr(mother, "motivation_weights_fixed", {}), getattr(mother, "motivation_weights_plastic", {})) if mother is not None else np.nan,
                 "w_drift": _mean_abs_diff_nested(getattr(mother, "psych_weights_fixed", {}), getattr(mother, "psych_weights_plastic", {})) if mother is not None else np.nan,
@@ -251,6 +266,36 @@ def main():
                         help="passive: mother does nothing; active: normal mother policy runs.")
     parser.add_argument("--plasticity", choices=["none", "outcome", "outcome_adaptive", "outcome_signed", "outcome_adaptive_signed"], default="none",
                         help="Learning rule for mother weights (active mode only). Default: none (keep weights fixed).")
+    parser.add_argument(
+        "--deficit-signal",
+        choices=["global", "local"],
+        default="global",
+        help="Plasticity deficit signal: global=overall deficit; local=motivation-aligned deficit (active mode only).",
+    )
+    parser.add_argument(
+        "--learn-w",
+        choices=["on", "off"],
+        default="on",
+        help="Whether plasticity updates psych/state weights w. 'off' freezes w and learns only motivation weights u (active mode only).",
+    )
+    parser.add_argument(
+        "--update-mode",
+        choices=["per_tick", "segment", "segment_capped"],
+        default="per_tick",
+        help="Plasticity credit assignment timing. per_tick=update each tick; segment=update when motivation changes; segment_capped=segment + update every K ticks.",
+    )
+    parser.add_argument(
+        "--segment-kmax",
+        type=int,
+        default=20,
+        help="For segment_capped: update every K ticks if motivation persists (default 20). Ignored in other modes.",
+    )
+    parser.add_argument(
+        "--genome",
+        type=str,
+        default=None,
+        help="Path to evolved motivation genome JSON (final_genome.json). If provided, uses it as baseline_weights for mothers.",
+    )
     parser.add_argument("--threats", type=int, default=DEFAULT_NUM_THREATS, help="Number of threats to spawn.")
     parser.add_argument("--food-start", type=int, default=DEFAULT_FOOD_AT_START, help="Food placed at start.")
     parser.add_argument("--food-spawn-interval", type=int, default=None,
@@ -270,10 +315,21 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
+    baseline_weights = None
+    if args.genome:
+        with open(args.genome, "r", encoding="utf-8") as f:
+            baseline_weights = json.load(f)
+        if not isinstance(baseline_weights, dict):
+            raise SystemExit("--genome JSON must be a dict of motivation weights (baseline_weights).")
+
     passive_mothers = (args.mode == "passive")
     plasticity_rule = None
     if not passive_mothers and args.plasticity in ("outcome", "outcome_adaptive", "outcome_signed", "outcome_adaptive_signed"):
         plasticity_rule = args.plasticity
+    plasticity_deficit_signal = args.deficit_signal if not passive_mothers else "global"
+    plasticity_learn_w = (args.learn_w == "on") if not passive_mothers else False
+    plasticity_update_mode = args.update_mode if not passive_mothers else "per_tick"
+    plasticity_segment_kmax = int(args.segment_kmax)
     use_fixed_weights = True  # keeps experiments comparable; can be exposed later if needed
 
     print("=" * 70)
@@ -307,7 +363,12 @@ def main():
                 day_step=args.day_step,
                 passive_mothers=passive_mothers,
                 plasticity_rule=plasticity_rule,
+                plasticity_deficit_signal=plasticity_deficit_signal,
+                plasticity_learn_w=plasticity_learn_w,
+                plasticity_update_mode=plasticity_update_mode,
+                plasticity_segment_kmax=plasticity_segment_kmax,
                 use_fixed_weights=use_fixed_weights,
+                baseline_weights=baseline_weights,
                 output_dir=args.output_dir,
                 log_timeseries=args.log_timeseries,
                 log_every_n_ticks=args.log_every,

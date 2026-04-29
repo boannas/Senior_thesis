@@ -68,6 +68,18 @@ def mother_policy_propose(world):
         # --- Motivation selection ---
         compute_motivations(mother)
         mother.selected_motivation = select_motivation(mother)
+
+        # Segment-based credit assignment (optional):
+        # update when motivation changes (or every K ticks if capped).
+        _plasticity_segment_on_select(mother, world)
+
+        # Store deficit at the moment of selection for outcome-gated plasticity.
+        # This is intentionally after selection so "local" deficit can align to the chosen motivation.
+        deficit_signal = getattr(world, "plasticity_deficit_signal", "global")
+        if deficit_signal == "local":
+            mother._deficit_before = compute_local_deficit(mother, mother.selected_motivation)
+        else:
+            mother._deficit_before = compute_overall_deficit(mother)
         goal, action, forage_mode = choose_goal_from_motivation(
             world, mother, mother.selected_motivation, food_perceived
         )
@@ -292,7 +304,7 @@ def compute_motivations(mother):
         "self":    {"fatigue": fatigue, "fear": fear, "stress": stress},
         "protect": {"child_injury": child_injury, "fear": fear, "closeness_deficit": closeness_deficit, "bonding": bonding},
     }
-    mother._deficit_before = compute_overall_deficit(mother)
+    # Note: deficit_before is stored after motivation selection in mother_policy_propose()
 
 
 def select_motivation(mother):
@@ -423,6 +435,51 @@ def compute_overall_deficit(mother):
     return total
 
 
+def compute_local_deficit(mother, selected_motivation):
+    """
+    Compute a motivation-aligned (local) deficit for outcome-gated plasticity.
+
+    Rationale: global deficit mixes many drifting states and can be noisy.
+    Local deficit focuses the learning signal on the states that the selected
+    motivation/action is intended to improve.
+    """
+    norm = 100.0
+    if not selected_motivation:
+        return compute_overall_deficit(mother)
+
+    sel = str(selected_motivation).lower()
+
+    # Mother-side components
+    energy_def = deficit_low(mother.energy, IDEAL_VALUE["M_energy"]) / norm
+    closeness_def = deficit_abs(mother.closeness_child, IDEAL_VALUE["M_closeness"]) / norm
+    fear_def = deficit_high(mother.fear_threat, IDEAL_VALUE["M_fear"]) / norm
+    stress_def = deficit_high(mother.stress, IDEAL_VALUE["M_stress"]) / norm
+    fatigue_def = deficit_high(mother.fatigue, IDEAL_VALUE["M_fatigue"]) / norm
+    bonding_def = deficit_low(mother.bonding, IDEAL_VALUE["M_bonding"]) / norm
+
+    # Child-side components (0 if absent/dead)
+    child_hunger_def = 0.0
+    child_warmth_def = 0.0
+    child_injury_def = 0.0
+    if mother.child is not None and mother.child.is_alive():
+        child = mother.child
+        child_hunger_def = deficit_high(child.hunger, IDEAL_VALUE["C_hunger"]) / norm
+        child_warmth_def = deficit_abs(child.warmth, IDEAL_VALUE["C_warmth"]) * 2 / norm
+        child_injury_def = deficit_high(child.injury, IDEAL_VALUE["C_injury"]) / norm
+
+    # Align to motivation feature sets used in compute_motivations()
+    if sel == "forage":
+        return child_hunger_def + energy_def + fear_def
+    if sel == "care":
+        return child_warmth_def + closeness_def + bonding_def
+    if sel == "self":
+        return fatigue_def + fear_def + stress_def
+    if sel == "protect":
+        return child_injury_def + fear_def + closeness_def + bonding_def
+
+    return compute_overall_deficit(mother)
+
+
 # Backwards-compatible alias (used by mother-plasticity experiments)
 def overall_deficit(mother):
     return compute_overall_deficit(mother)
@@ -457,13 +514,22 @@ def update_plasticity(mother, action, world):
     if not hasattr(mother, "motivation_weights_plastic"):
         return
 
+    update_mode = getattr(world, "plasticity_update_mode", "per_tick")
+    if update_mode in ("segment", "segment_capped"):
+        # Segment-based updates are handled at motivation selection time.
+        return
+
     base_lr = getattr(mother, "learning_rate", 0.02)
     plasticity_rule = getattr(world, "plasticity_rule", "outcome")
     deficit_before = getattr(mother, "_deficit_before", None)
     if deficit_before is None:
         return
 
-    deficit_after = compute_overall_deficit(mother)
+    deficit_signal = getattr(world, "plasticity_deficit_signal", "global")
+    if deficit_signal == "local":
+        deficit_after = compute_local_deficit(mother, mother.selected_motivation)
+    else:
+        deficit_after = compute_overall_deficit(mother)
     inputs = getattr(mother, "_last_motivation_inputs", None)
     if inputs is None:
         return
@@ -506,7 +572,8 @@ def update_plasticity(mother, action, world):
         _clamp_plastic_weight(mot_plastic, selected, key)
 
     # --- Update psych weights (plastic) ---
-    if hasattr(mother, "psych_weights_plastic"):
+    learn_w = bool(getattr(world, "plasticity_learn_w", True))
+    if learn_w and hasattr(mother, "psych_weights_plastic"):
         psych_plastic = mother.psych_weights_plastic
         relevant_categories = MOTIVATION_TO_PSYCH_CATEGORIES.get(selected, [])
 
@@ -564,3 +631,162 @@ def update_plasticity(mother, action, world):
                     elif worsened:
                         psych_plastic[category][key] -= learning_rate
                 _clamp_plastic_weight(psych_plastic, category, key)
+
+
+def _plasticity_deficit_now(mother, world, selected_motivation):
+    """Compute deficit using current world plasticity deficit signal setting."""
+    deficit_signal = getattr(world, "plasticity_deficit_signal", "global")
+    if deficit_signal == "local":
+        return compute_local_deficit(mother, selected_motivation)
+    return compute_overall_deficit(mother)
+
+
+def _plasticity_learning_rate_from(deficit_before: float, mother, world) -> float:
+    """Compute effective learning rate, matching update_plasticity() behavior."""
+    base_lr = getattr(mother, "learning_rate", 0.02)
+    plasticity_rule = getattr(world, "plasticity_rule", "outcome")
+    if plasticity_rule in ("outcome_adaptive", "outcome_adaptive_signed"):
+        lr_min = getattr(mother, "learning_rate_min", 0.002)
+        lr_max = getattr(mother, "learning_rate_max", 0.05)
+        deficit_scale = getattr(mother, "learning_deficit_scale", 2.0)
+        s = max(0.0, min(1.0, float(deficit_before) / float(deficit_scale)))
+        return float(lr_min + (lr_max - lr_min) * s)
+    return float(base_lr)
+
+
+def _plasticity_apply_u_update(mother, selected: str, improved: bool, worsened: bool, learning_rate: float, inputs_avg: dict):
+    """Apply u (motivation) plasticity update with the same thresholding/clamping."""
+    if selected not in getattr(mother, "motivation_weights_plastic", {}):
+        return
+    state_threshold = 0.25
+    mot_plastic = mother.motivation_weights_plastic
+    for key in mot_plastic[selected]:
+        input_value = float(inputs_avg.get(key, 0.0))
+        if input_value < state_threshold:
+            continue
+        if improved:
+            mot_plastic[selected][key] += learning_rate
+        elif worsened:
+            mot_plastic[selected][key] -= learning_rate
+        _clamp_plastic_weight(mot_plastic, selected, key)
+
+
+def _plasticity_apply_w_update(mother, selected: str, improved: bool, worsened: bool, learning_rate: float, world):
+    """Apply w (psych) plasticity update using the existing rule."""
+    learn_w = bool(getattr(world, "plasticity_learn_w", True))
+    if (not learn_w) or (not hasattr(mother, "psych_weights_plastic")):
+        return
+    plasticity_rule = getattr(world, "plasticity_rule", "outcome")
+    signed = plasticity_rule in ("outcome_signed", "outcome_adaptive_signed")
+    psych_plastic = mother.psych_weights_plastic
+    relevant_categories = MOTIVATION_TO_PSYCH_CATEGORIES.get(selected, [])
+
+    # States that are "good when high" vs "bad when high"
+    GOOD_HIGH_CATEGORIES = {"oxytocin", "bonding"}
+    BAD_HIGH_CATEGORIES = {"fear", "cortisol", "stress", "child_need"}
+
+    def _delta_for_psych(category: str, key: str) -> float:
+        if not (improved or worsened):
+            return 0.0
+        if (category not in GOOD_HIGH_CATEGORIES) and (category not in BAD_HIGH_CATEGORIES):
+            return learning_rate if improved else -learning_rate
+
+        is_good_high = category in GOOD_HIGH_CATEGORIES
+        is_decay = "decay" in key
+        is_gain = ("gain" in key) and not is_decay
+        if not (is_gain or is_decay):
+            return learning_rate if improved else -learning_rate
+
+        if is_good_high:
+            sign = +1.0 if is_gain else -1.0
+        else:
+            sign = -1.0 if is_gain else +1.0
+        if worsened:
+            sign *= -1.0
+        return sign * learning_rate
+
+    for category in relevant_categories:
+        if category not in psych_plastic:
+            continue
+        for key in psych_plastic[category]:
+            if signed:
+                psych_plastic[category][key] += _delta_for_psych(category, key)
+            else:
+                if improved:
+                    psych_plastic[category][key] += learning_rate
+                elif worsened:
+                    psych_plastic[category][key] -= learning_rate
+            _clamp_plastic_weight(psych_plastic, category, key)
+
+
+def _plasticity_segment_on_select(mother, world):
+    """
+    Segment-based credit assignment:
+    - 'segment': update weights only when motivation changes
+    - 'segment_capped': also update every K ticks if the same motivation persists
+
+    Deficit is evaluated at the *start* of a tick (after internal state updates),
+    which avoids blaming a motivation for movement/action costs before it has time to pay off.
+    """
+    update_mode = getattr(world, "plasticity_update_mode", "per_tick")
+    if update_mode not in ("segment", "segment_capped"):
+        return
+    if getattr(world, "plasticity_rule", None) is None:
+        return
+    if not hasattr(mother, "motivation_weights_plastic"):
+        return
+
+    current = mother.selected_motivation.lower() if mother.selected_motivation else None
+    if current is None:
+        return
+
+    # Initialize segment state on first call
+    if not hasattr(mother, "_plast_seg_mot"):
+        mother._plast_seg_mot = current
+        mother._plast_seg_deficit0 = _plasticity_deficit_now(mother, world, mother.selected_motivation)
+        mother._plast_seg_len = 0
+        mother._plast_seg_input_sum = {}
+        mother._plast_seg_input_n = 0
+
+    # Accumulate inputs for the current selected motivation (average over segment)
+    inputs = getattr(mother, "_last_motivation_inputs", None) or {}
+    cur_inputs = inputs.get(current, {}) if isinstance(inputs, dict) else {}
+    for k, v in cur_inputs.items():
+        mother._plast_seg_input_sum[k] = mother._plast_seg_input_sum.get(k, 0.0) + float(v)
+    mother._plast_seg_input_n = int(mother._plast_seg_input_n) + 1
+    mother._plast_seg_len = int(getattr(mother, "_plast_seg_len", 0)) + 1
+
+    prev = getattr(mother, "_plast_seg_mot", current)
+    kmax = int(getattr(world, "plasticity_segment_kmax", 20))
+    do_cap = (update_mode == "segment_capped") and (kmax > 0) and (mother._plast_seg_len >= kmax)
+    changed = (current != prev)
+
+    if not (changed or do_cap):
+        return
+
+    # Evaluate the segment that just ended (prev), using current deficit as end-of-segment value.
+    deficit0 = float(getattr(mother, "_plast_seg_deficit0", _plasticity_deficit_now(mother, world, mother.selected_motivation)))
+    deficit1 = float(_plasticity_deficit_now(mother, world, mother.selected_motivation))
+    improved = deficit1 < deficit0
+    worsened = deficit1 > deficit0
+    learning_rate = _plasticity_learning_rate_from(deficit0, mother, world)
+
+    n = max(1, int(getattr(mother, "_plast_seg_input_n", 1)))
+    inputs_avg = {k: float(v) / float(n) for k, v in (getattr(mother, "_plast_seg_input_sum", {}) or {}).items()}
+
+    # Apply updates to weights for the segment's motivation (prev)
+    _plasticity_apply_u_update(mother, prev, improved, worsened, learning_rate, inputs_avg)
+    _plasticity_apply_w_update(mother, prev, improved, worsened, learning_rate, world)
+
+    # Log diagnostics
+    mother._last_deficit_before = float(deficit0)
+    mother._last_deficit_after = float(deficit1)
+    mother._last_learning_rate_eff = float(learning_rate)
+    mother._last_plasticity_rule = getattr(world, "plasticity_rule", None)
+
+    # Start a new segment if changed; otherwise reset (cap) with current as new baseline.
+    mother._plast_seg_mot = current
+    mother._plast_seg_deficit0 = float(deficit1)
+    mother._plast_seg_len = 0
+    mother._plast_seg_input_sum = {}
+    mother._plast_seg_input_n = 0

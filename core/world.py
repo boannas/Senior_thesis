@@ -32,6 +32,10 @@ class World:
         seed=42,
         day_step=None,
         plasticity_rule="outcome",
+        plasticity_deficit_signal="global",
+        plasticity_learn_w=True,
+        plasticity_update_mode="per_tick",
+        plasticity_segment_kmax=20,
         food_spawn_interval=None,
         food_spawn_n=1,
         use_fixed_weights=False,
@@ -45,6 +49,17 @@ class World:
         self.grid_h = grid_h
         self.day_step = day_step
         self.plasticity_rule = plasticity_rule
+        # Plasticity configuration:
+        # - deficit signal: "global" (overall deficit) or "local" (motivation-aligned deficit)
+        # - learn_w: whether to update psych/state dynamics weights (w); if False, only u updates
+        self.plasticity_deficit_signal = plasticity_deficit_signal
+        self.plasticity_learn_w = bool(plasticity_learn_w)
+        # - update_mode:
+        #   * "per_tick": current behavior (compare deficit_before vs deficit_after each tick)
+        #   * "segment": update only when motivation changes (credit assignment over a run)
+        #   * "segment_capped": like segment, but also update every K ticks if the run persists
+        self.plasticity_update_mode = plasticity_update_mode
+        self.plasticity_segment_kmax = int(plasticity_segment_kmax)
         self.food_spawn_interval = food_spawn_interval
         self.food_spawn_n = food_spawn_n
 
