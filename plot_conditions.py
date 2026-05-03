@@ -127,6 +127,29 @@ def _hazard_curve(time: np.ndarray, event: np.ndarray, max_t: int) -> Tuple[np.n
     return np.arange(max_t + 1, dtype=float), hz
 
 
+def _compare_condition_colors(n: int) -> List:
+    """
+    Distinct colors for overlay/compare plots (KM, boxplots, hazard).
+    Uses tab10, then tab20, then evenly spaced hues if many conditions.
+    """
+    if n <= 0:
+        return []
+    tab10 = list(plt.cm.tab10.colors)
+    if n <= len(tab10):
+        return tab10[:n]
+    tab20 = list(plt.cm.tab20.colors)
+    if n <= len(tab20):
+        return tab20[:n]
+    hsv = plt.get_cmap("hsv")
+    return [hsv(i / n) for i in range(n)]
+
+
+def _linestyle_for_compare(name: str) -> str:
+    """Dashed for passive, solid for active — complements distinct colors."""
+    f = _parse_factors(name)
+    return "--" if f["mode"] == "passive" else "-"
+
+
 def _discover_conditions(root: str) -> List[ConditionData]:
     out: List[ConditionData] = []
     for dirpath, _dirnames, filenames in os.walk(root):
@@ -158,7 +181,8 @@ def _load_timeseries(paths: List[str]) -> pd.DataFrame:
     df_all = pd.concat(frames, ignore_index=True)
     # Ensure numeric columns
     for c in df_all.columns:
-        if c in ("mother_selected_motivation",):
+        # Keep categorical/string columns as-is so later plots can match exact labels.
+        if c in ("mother_selected_motivation", "mother_action"):
             continue
         df_all[c] = pd.to_numeric(df_all[c], errors="coerce")
     return df_all
@@ -227,6 +251,20 @@ def _plot_band(ax, x, mean, lo, hi, label: str, color: str):
     ax.fill_between(x, lo, hi, color=color, alpha=0.2, linewidth=0)
 
 
+def _fraction_profile(df: pd.DataFrame, col: str, categories: List[str]) -> np.ndarray:
+    """
+    Fraction of ticks spent in each category for a dataframe slice.
+    Unknown/missing labels are ignored.
+    """
+    if df.empty or col not in df.columns:
+        return np.zeros(len(categories), dtype=float)
+    s = df[col].astype(str)
+    total = float(len(s))
+    if total <= 0:
+        return np.zeros(len(categories), dtype=float)
+    return np.array([(s == c).sum() / total for c in categories], dtype=float)
+
+
 def plot_condition(cond: ConditionData, *, use_days: bool = True) -> None:
     df_all = _load_timeseries(cond.timeseries_paths)
     if df_all.empty:
@@ -266,6 +304,64 @@ def plot_condition(cond: ConditionData, *, use_days: bool = True) -> None:
     ax.legend(loc="lower left")
     fig.tight_layout()
     fig.savefig(os.path.join(cond.path, "plot_survival.png"), dpi=160, bbox_inches="tight")
+    plt.close(fig)
+
+    # --- 1b) Motivation + action profiles: child alive vs post-child-death ---
+    mot_categories = ["Forage", "Care", "Self", "Protect"]
+    action_categories = ["none", "care", "rest", "eat", "pick_food", "feed_child", "threaten"]
+    alive_mask = pd.to_numeric(df_all["child_alive"], errors="coerce").fillna(0).astype(int) > 0
+    df_alive = df_all[alive_mask].copy()
+    df_post = df_all[~alive_mask].copy()
+
+    fig, axes = plt.subplots(2, 2, figsize=(11, 7), sharey="row")
+    mot_colors = ["tab:blue", "tab:orange", "tab:green", "tab:red"]
+    act_colors = ["tab:gray", "tab:cyan", "tab:green", "tab:olive", "tab:brown", "tab:purple", "tab:red"]
+
+    # Ensure y tick labels appear (sharey + tight_layout can hide them on some backends)
+    yticks = np.linspace(0.0, 1.0, 6)
+    for ax in axes.flatten():
+        ax.set_yticks(yticks)
+        ax.tick_params(axis="y", which="major", labelleft=True)
+
+    # Motivation profile
+    for ax, subset, title in [
+        (axes[0, 0], df_alive, "While child alive"),
+        (axes[0, 1], df_post, "After child death"),
+    ]:
+        frac = _fraction_profile(subset, "mother_selected_motivation", mot_categories)
+        ax.bar(mot_categories, frac, color=mot_colors, alpha=0.85)
+        ax.set_title(title)
+        ax.grid(True, axis="y", alpha=0.3)
+        ax.set_ylim(0.0, 1.0)
+        ax.tick_params(axis="x", labelrotation=20)
+    axes[0, 0].set_ylabel("Tick fraction")
+    axes[0, 0].set_xlabel("Motivation")
+    axes[0, 1].set_xlabel("Motivation")
+
+    # Action profile (requires newer logs with mother_action column)
+    if "mother_action" in df_all.columns:
+        for ax, subset, title in [
+            (axes[1, 0], df_alive, "While child alive"),
+            (axes[1, 1], df_post, "After child death"),
+        ]:
+            frac = _fraction_profile(subset, "mother_action", action_categories)
+            ax.bar(action_categories, frac, color=act_colors, alpha=0.85)
+            ax.set_title(title)
+            ax.grid(True, axis="y", alpha=0.3)
+            ax.set_ylim(0.0, 1.0)
+            ax.tick_params(axis="x", labelrotation=25)
+    else:
+        # Backward compatibility: older logs may not have mother_action.
+        for ax in [axes[1, 0], axes[1, 1]]:
+            ax.text(0.5, 0.5, "No mother_action column\n(re-run experiment with latest logger)", ha="center", va="center")
+            ax.set_axis_off()
+    axes[1, 0].set_ylabel("Tick fraction")
+    axes[1, 0].set_xlabel("Action")
+    axes[1, 1].set_xlabel("Action")
+
+    fig.suptitle(f"Motivation/Action profile: child alive vs post-death — {cond.name}")
+    fig.tight_layout(rect=(0.03, 0.02, 1.0, 1.0))
+    fig.savefig(os.path.join(cond.path, "plot_motivation_action_alive_vs_post.png"), dpi=160, bbox_inches="tight")
     plt.close(fig)
 
     # --- 2) Child states ---
@@ -448,50 +544,43 @@ def main():
         if not cond_names:
             return
 
-        # # ----------------------------
-        # # (1) Kaplan–Meier (split)
-        # # ----------------------------
-        # def _style_for(name: str):
-        #     f = _parse_factors(name)
-        #     ls = "-" if f["mode"] == "active" else "--"
-        #     if f["threat"] == "threat":
-        #         c = "tab:red"
-        #     elif f["threat"] == "no_threat":
-        #         c = "tab:blue"
-        #     else:
-        #         c = "tab:gray"
-        #     return ls, c
-
-        # def _plot_km(agent: str, out_name: str):
-        #     fig, ax = plt.subplots(figsize=(7.5, 4))
-        #     for name in cond_names:
-        #         df = rep_by_cond[name]
-        #         if df.empty:
-        #             continue
-        #         max_ticks = float(np.nanmax(pd.to_numeric(df["max_ticks"], errors="coerce")))
-        #         t = pd.to_numeric(df[f"{agent}_death_tick"], errors="coerce").to_numpy(dtype=float)
-        #         t = t[np.isfinite(t)]
-        #         if t.size == 0:
-        #             continue
-        #         e = (t < max_ticks).astype(int)
-        #         tt, ss = _km_curve(t / day_step, e)
-        #         ls, c = _style_for(name)
-        #         ax.step(tt, ss, where="post", linestyle=ls, color=c, linewidth=2, label=name)
-        #     ax.set_title(f"Kaplan–Meier survival — {agent}")
-        #     ax.set_xlabel("Days")
-        #     ax.set_ylabel("Survival probability")
-        #     ax.set_ylim(-0.02, 1.02)
-        #     ax.grid(True, alpha=0.3)
-        #     ax.legend(fontsize=7, loc="upper right")
-        #     fig.tight_layout()
-        #     fig.savefig(os.path.join(out_dir, out_name), dpi=180, bbox_inches="tight")
-        #     plt.close(fig)
-
-        # _plot_km("child", "plot_km_child.png")
-        # _plot_km("mother", "plot_km_mother.png")
+        compare_colors = _compare_condition_colors(len(cond_names))
+        color_by_name = {name: compare_colors[i] for i, name in enumerate(cond_names)}
 
         # ----------------------------
-        # (2) Boxplots (median/IQR)
+        # (1) Kaplan–Meier (one distinct color per condition)
+        # ----------------------------
+        def _plot_km(agent: str, out_name: str):
+            fig, ax = plt.subplots(figsize=(7.5, 4))
+            for name in cond_names:
+                df = rep_by_cond[name]
+                if df.empty:
+                    continue
+                max_ticks = float(np.nanmax(pd.to_numeric(df["max_ticks"], errors="coerce")))
+                t = pd.to_numeric(df[f"{agent}_death_tick"], errors="coerce").to_numpy(dtype=float)
+                t = t[np.isfinite(t)]
+                if t.size == 0:
+                    continue
+                e = (t < max_ticks).astype(int)
+                tt, ss = _km_curve(t / day_step, e)
+                ls = _linestyle_for_compare(name)
+                c = color_by_name[name]
+                ax.step(tt, ss, where="post", linestyle=ls, color=c, linewidth=2, label=name)
+            ax.set_title(f"Kaplan–Meier survival — {agent}")
+            ax.set_xlabel("Days")
+            ax.set_ylabel("Survival probability")
+            ax.set_ylim(-0.02, 1.02)
+            ax.grid(True, alpha=0.3)
+            ax.legend(fontsize=7, loc="upper right")
+            fig.tight_layout()
+            fig.savefig(os.path.join(out_dir, out_name), dpi=180, bbox_inches="tight")
+            plt.close(fig)
+
+        _plot_km("child", "plot_km_child.png")
+        _plot_km("mother", "plot_km_mother.png")
+
+        # ----------------------------
+        # (2) Boxplots (median/IQR) — distinct fill color per condition
         # ----------------------------
         child_days = []
         mother_days = []
@@ -503,158 +592,169 @@ def main():
             mother_days.append(m[np.isfinite(m)])
 
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-        axes[0].boxplot(child_days, labels=cond_names, showfliers=False)
+        bp0 = axes[0].boxplot(child_days, labels=cond_names, showfliers=False, patch_artist=True)
         axes[0].set_title("Child time-to-death (median/IQR)")
         axes[0].set_ylabel("Days")
         axes[0].grid(True, axis="y", alpha=0.3)
-        axes[0].tick_params(axis="x", rotation=25)
+        for patch, name in zip(bp0["boxes"], cond_names):
+            patch.set_facecolor(color_by_name[name])
+            patch.set_alpha(0.65)
 
-        axes[1].boxplot(mother_days, labels=cond_names, showfliers=False)
+        bp1 = axes[1].boxplot(mother_days, labels=cond_names, showfliers=False, patch_artist=True)
         axes[1].set_title("Mother time-to-death (median/IQR)")
         axes[1].set_ylabel("Days")
         axes[1].grid(True, axis="y", alpha=0.3)
-        axes[1].tick_params(axis="x", rotation=25)
-        fig.tight_layout()
+        for patch, name in zip(bp1["boxes"], cond_names):
+            patch.set_facecolor(color_by_name[name])
+            patch.set_alpha(0.65)
+
+        # Long condition names: rotate and right-align so labels sit under the correct box
+        for ax in axes:
+            ax.tick_params(axis="x", which="major", labelrotation=35)
+            for lab in ax.get_xticklabels():
+                lab.set_horizontalalignment("right")
+        fig.tight_layout(rect=(0, 0.06, 1, 1))
         fig.savefig(os.path.join(out_dir, "plot_ttd_boxplots.png"), dpi=180, bbox_inches="tight")
         plt.close(fig)
 
-        # # ----------------------------
-        # # (3) Cumulative deaths + hazard
-        # # ----------------------------
-        # def _plot_hazard_and_cum(agent: str):
-        #     fig, axes = plt.subplots(1, 2, figsize=(14, 4))
-        #     ax_cum, ax_hz = axes
-        #     for name in cond_names:
-        #         df = rep_by_cond[name]
-        #         if df.empty:
-        #             continue
-        #         max_ticks = int(np.nanmax(pd.to_numeric(df["max_ticks"], errors="coerce")))
-        #         t = pd.to_numeric(df[f"{agent}_death_tick"], errors="coerce").to_numpy(dtype=float)
-        #         t = t[np.isfinite(t)]
-        #         if t.size == 0:
-        #             continue
-        #         e = (t < max_ticks).astype(int)
-        #         tt, ss = _km_curve(t, e)
-        #         ls, c = _style_for(name)
-        #         ax_cum.step(tt / day_step, 1.0 - ss, where="post", linestyle=ls, color=c, linewidth=2, label=name)
-        #         ht, hz = _hazard_curve(t.astype(int), e.astype(int), max_t=max_ticks)
-        #         win = 5
-        #         kernel = np.ones(win) / win
-        #         hz_s = np.convolve(np.nan_to_num(hz, nan=0.0), kernel, mode="same")
-        #         ax_hz.plot(ht / day_step, hz_s, linestyle=ls, color=c, linewidth=2, label=name)
+        # ----------------------------
+        # (3) Cumulative deaths + hazard (distinct color per condition)
+        # ----------------------------
+        def _plot_hazard_and_cum(agent: str):
+            fig, axes_hz = plt.subplots(1, 2, figsize=(14, 4))
+            ax_cum, ax_hz = axes_hz
+            for name in cond_names:
+                df = rep_by_cond[name]
+                if df.empty:
+                    continue
+                max_ticks_i = int(np.nanmax(pd.to_numeric(df["max_ticks"], errors="coerce")))
+                t = pd.to_numeric(df[f"{agent}_death_tick"], errors="coerce").to_numpy(dtype=float)
+                t = t[np.isfinite(t)]
+                if t.size == 0:
+                    continue
+                e = (t < max_ticks_i).astype(int)
+                tt, ss = _km_curve(t, e)
+                ls = _linestyle_for_compare(name)
+                c = color_by_name[name]
+                ax_cum.step(tt / day_step, 1.0 - ss, where="post", linestyle=ls, color=c, linewidth=2, label=name)
+                ht, hz = _hazard_curve(t.astype(int), e.astype(int), max_t=max_ticks_i)
+                win = 5
+                kernel = np.ones(win) / win
+                hz_s = np.convolve(np.nan_to_num(hz, nan=0.0), kernel, mode="same")
+                ax_hz.plot(ht / day_step, hz_s, linestyle=ls, color=c, linewidth=2, label=name)
 
-        #     ax_cum.set_title(f"Cumulative deaths — {agent}")
-        #     ax_cum.set_xlabel("Days")
-        #     ax_cum.set_ylabel("Cumulative death fraction")
-        #     ax_cum.set_ylim(-0.02, 1.02)
-        #     ax_cum.grid(True, alpha=0.3)
-        #     ax_cum.legend(fontsize=7, loc="lower right")
+            ax_cum.set_title(f"Cumulative deaths — {agent}")
+            ax_cum.set_xlabel("Days")
+            ax_cum.set_ylabel("Cumulative death fraction")
+            ax_cum.set_ylim(-0.02, 1.02)
+            ax_cum.grid(True, alpha=0.3)
+            ax_cum.legend(fontsize=7, loc="lower right")
 
-        #     ax_hz.set_title(f"Hazard rate (smoothed) — {agent}")
-        #     ax_hz.set_xlabel("Days")
-        #     ax_hz.set_ylabel("Hazard per tick")
-        #     ax_hz.grid(True, alpha=0.3)
-        #     ax_hz.legend(fontsize=7, loc="upper right")
+            ax_hz.set_title(f"Hazard rate (smoothed) — {agent}")
+            ax_hz.set_xlabel("Days")
+            ax_hz.set_ylabel("Hazard per tick")
+            ax_hz.grid(True, alpha=0.3)
+            ax_hz.legend(fontsize=7, loc="upper right")
 
-        #     fig.tight_layout()
-        #     fig.savefig(os.path.join(out_dir, f"plot_hazard_cum_{agent}.png"), dpi=180, bbox_inches="tight")
-        #     plt.close(fig)
+            fig.tight_layout()
+            fig.savefig(os.path.join(out_dir, f"plot_hazard_cum_{agent}.png"), dpi=180, bbox_inches="tight")
+            plt.close(fig)
 
-        # _plot_hazard_and_cum("child")
-        # _plot_hazard_and_cum("mother")
+        _plot_hazard_and_cum("child")
+        _plot_hazard_and_cum("mother")
 
-        # # ----------------------------
-        # # (4) Log-rank tests (key comparisons)
-        # # ----------------------------
-        # stats_rows = []
-        # by_factor: Dict[Tuple[str, str], str] = {}
-        # for name in cond_names:
-        #     f = _parse_factors(name)
-        #     by_factor[(f["mode"], f["threat"])] = name
+        # ----------------------------
+        # (4) Log-rank tests (key comparisons)
+        # ----------------------------
+        stats_rows = []
+        by_factor: Dict[Tuple[str, str], str] = {}
+        for name in cond_names:
+            f = _parse_factors(name)
+            by_factor[(f["mode"], f["threat"])] = name
 
-        # def _add_lr(agent: str, a: str, b: str, label: str):
-        #     dfa = rep_by_cond.get(a)
-        #     dfb = rep_by_cond.get(b)
-        #     if dfa is None or dfb is None or dfa.empty or dfb.empty:
-        #         return
-        #     max_a = float(np.nanmax(pd.to_numeric(dfa["max_ticks"], errors="coerce")))
-        #     max_b = float(np.nanmax(pd.to_numeric(dfb["max_ticks"], errors="coerce")))
-        #     max_ticks = min(max_a, max_b)
-        #     ta = pd.to_numeric(dfa[f"{agent}_death_tick"], errors="coerce").to_numpy(dtype=float)
-        #     tb = pd.to_numeric(dfb[f"{agent}_death_tick"], errors="coerce").to_numpy(dtype=float)
-        #     ta = ta[np.isfinite(ta)]
-        #     tb = tb[np.isfinite(tb)]
-        #     ea = (ta < max_ticks).astype(int)
-        #     eb = (tb < max_ticks).astype(int)
-        #     chi2, p = _logrank_test(ta, ea, tb, eb)
-        #     stats_rows.append({"comparison": label, "agent": agent, "cond_a": a, "cond_b": b, "chi2_df1": chi2, "p_value": p})
+        def _add_lr(agent: str, a: str, b: str, label: str):
+            dfa = rep_by_cond.get(a)
+            dfb = rep_by_cond.get(b)
+            if dfa is None or dfb is None or dfa.empty or dfb.empty:
+                return
+            max_a = float(np.nanmax(pd.to_numeric(dfa["max_ticks"], errors="coerce")))
+            max_b = float(np.nanmax(pd.to_numeric(dfb["max_ticks"], errors="coerce")))
+            max_ticks = min(max_a, max_b)
+            ta = pd.to_numeric(dfa[f"{agent}_death_tick"], errors="coerce").to_numpy(dtype=float)
+            tb = pd.to_numeric(dfb[f"{agent}_death_tick"], errors="coerce").to_numpy(dtype=float)
+            ta = ta[np.isfinite(ta)]
+            tb = tb[np.isfinite(tb)]
+            ea = (ta < max_ticks).astype(int)
+            eb = (tb < max_ticks).astype(int)
+            chi2, p = _logrank_test(ta, ea, tb, eb)
+            stats_rows.append({"comparison": label, "agent": agent, "cond_a": a, "cond_b": b, "chi2_df1": chi2, "p_value": p})
 
-        # for threat in ("no_threat", "threat"):
-        #     a = by_factor.get(("active", threat))
-        #     b = by_factor.get(("passive", threat))
-        #     if a and b:
-        #         _add_lr("child", a, b, f"active vs passive ({threat})")
-        #         _add_lr("mother", a, b, f"active vs passive ({threat})")
-        # for mode in ("active", "passive"):
-        #     a = by_factor.get((mode, "threat"))
-        #     b = by_factor.get((mode, "no_threat"))
-        #     if a and b:
-        #         _add_lr("child", a, b, f"threat vs no_threat ({mode})")
-        #         _add_lr("mother", a, b, f"threat vs no_threat ({mode})")
+        for threat in ("no_threat", "threat"):
+            a = by_factor.get(("active", threat))
+            b = by_factor.get(("passive", threat))
+            if a and b:
+                _add_lr("child", a, b, f"active vs passive ({threat})")
+                _add_lr("mother", a, b, f"active vs passive ({threat})")
+        for mode in ("active", "passive"):
+            a = by_factor.get((mode, "threat"))
+            b = by_factor.get((mode, "no_threat"))
+            if a and b:
+                _add_lr("child", a, b, f"threat vs no_threat ({mode})")
+                _add_lr("mother", a, b, f"threat vs no_threat ({mode})")
 
-        # if stats_rows:
-        #     pd.DataFrame(stats_rows).to_csv(os.path.join(out_dir, "survival_stats_logrank.csv"), index=False)
+        if stats_rows:
+            pd.DataFrame(stats_rows).to_csv(os.path.join(out_dir, "survival_stats_logrank.csv"), index=False)
 
-        # # ----------------------------
-        # # (5) Phase/regime plots (optional; uses timeseries)
-        # # ----------------------------
-        # phase_rows = []
-        # for cond in conds:
-        #     if not cond.timeseries_paths:
-        #         continue
-        #     for pth in cond.timeseries_paths:
-        #         df_ts = pd.read_csv(pth)
-        #         if df_ts.empty or "child_alive" not in df_ts.columns:
-        #             continue
-        #         alive = pd.to_numeric(df_ts["child_alive"], errors="coerce").fillna(0).to_numpy(dtype=float) > 0.0
-        #         if not np.any(alive):
-        #             continue
-        #         last = int(np.where(alive)[0].max())
-        #         df_u = df_ts.iloc[: last + 1]
-        #         surv_days = float(df_u["day"].iloc[-1]) if "day" in df_u.columns else float(df_u["tick"].iloc[-1]) / day_step
-        #         def _m(col):
-        #             return float(pd.to_numeric(df_u[col], errors="coerce").mean()) if col in df_u.columns else np.nan
-        #         phase_rows.append({
-        #             "condition": cond.name,
-        #             "replicate": int(df_u["replicate"].iloc[0]) if "replicate" in df_u.columns else -1,
-        #             "seed": int(df_u["seed"].iloc[0]) if "seed" in df_u.columns else -1,
-        #             "child_survival_days": surv_days,
-        #             "mean_child_hunger": _m("child_hunger"),
-        #             "mean_mother_energy": _m("mother_energy"),
-        #             "mean_mother_fear": _m("mother_fear_threat"),
-        #         })
+        # ----------------------------
+        # (5) Phase/regime plots (optional; uses timeseries)
+        # ----------------------------
+        phase_rows = []
+        for cond in conds:
+            if not cond.timeseries_paths:
+                continue
+            for pth in cond.timeseries_paths:
+                df_ts = pd.read_csv(pth)
+                if df_ts.empty or "child_alive" not in df_ts.columns:
+                    continue
+                alive = pd.to_numeric(df_ts["child_alive"], errors="coerce").fillna(0).to_numpy(dtype=float) > 0.0
+                if not np.any(alive):
+                    continue
+                last = int(np.where(alive)[0].max())
+                df_u = df_ts.iloc[: last + 1]
+                surv_days = float(df_u["day"].iloc[-1]) if "day" in df_u.columns else float(df_u["tick"].iloc[-1]) / day_step
+                def _m(col):
+                    return float(pd.to_numeric(df_u[col], errors="coerce").mean()) if col in df_u.columns else np.nan
+                phase_rows.append({
+                    "condition": cond.name,
+                    "replicate": int(df_u["replicate"].iloc[0]) if "replicate" in df_u.columns else -1,
+                    "seed": int(df_u["seed"].iloc[0]) if "seed" in df_u.columns else -1,
+                    "child_survival_days": surv_days,
+                    "mean_child_hunger": _m("child_hunger"),
+                    "mean_mother_energy": _m("mother_energy"),
+                    "mean_mother_fear": _m("mother_fear_threat"),
+                })
 
-        # if phase_rows:
-        #     dfp = pd.DataFrame(phase_rows)
-        #     dfp.to_csv(os.path.join(out_dir, "phase_regime_features.csv"), index=False)
-        #     def _scatter(xcol, out_name, title):
-        #         if xcol not in dfp.columns:
-        #             return
-        #         fig, ax = plt.subplots(figsize=(6.5, 4))
-        #         for cname in sorted(dfp["condition"].unique().tolist()):
-        #             sub = dfp[dfp["condition"] == cname]
-        #             ax.scatter(sub[xcol], sub["child_survival_days"], s=18, alpha=0.7, label=cname)
-        #         ax.set_xlabel(xcol)
-        #         ax.set_ylabel("child_survival_days")
-        #         ax.set_title(title)
-        #         ax.grid(True, alpha=0.3)
-        #         ax.legend(fontsize=7, loc="best")
-        #         fig.tight_layout()
-        #         fig.savefig(os.path.join(out_dir, out_name), dpi=180, bbox_inches="tight")
-        #         plt.close(fig)
-        #     _scatter("mean_child_hunger", "plot_phase_survival_vs_hunger.png", "Survival vs mean child hunger")
-        #     _scatter("mean_mother_energy", "plot_phase_survival_vs_mother_energy.png", "Survival vs mean mother energy")
-        #     _scatter("mean_mother_fear", "plot_phase_survival_vs_mother_fear.png", "Survival vs mean mother fear")
+        if phase_rows:
+            dfp = pd.DataFrame(phase_rows)
+            dfp.to_csv(os.path.join(out_dir, "phase_regime_features.csv"), index=False)
+            def _scatter(xcol, out_name, title):
+                if xcol not in dfp.columns:
+                    return
+                fig, ax = plt.subplots(figsize=(6.5, 4))
+                for cname in sorted(dfp["condition"].unique().tolist()):
+                    sub = dfp[dfp["condition"] == cname]
+                    ax.scatter(sub[xcol], sub["child_survival_days"], s=18, alpha=0.7, label=cname)
+                ax.set_xlabel(xcol)
+                ax.set_ylabel("child_survival_days")
+                ax.set_title(title)
+                ax.grid(True, alpha=0.3)
+                ax.legend(fontsize=7, loc="best")
+                fig.tight_layout()
+                fig.savefig(os.path.join(out_dir, out_name), dpi=180, bbox_inches="tight")
+                plt.close(fig)
+            _scatter("mean_child_hunger", "plot_phase_survival_vs_hunger.png", "Survival vs mean child hunger")
+            _scatter("mean_mother_energy", "plot_phase_survival_vs_mother_energy.png", "Survival vs mean mother energy")
+            _scatter("mean_mother_fear", "plot_phase_survival_vs_mother_fear.png", "Survival vs mean mother fear")
 
         print(f"Saved comparison pack in: {out_dir}")
 

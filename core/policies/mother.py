@@ -151,6 +151,10 @@ def apply_mother_intents(world, intents):
     prev_positions = intents["prev_pos"]
     actions = intents["intended_actions"]
 
+    # Expose action executed this tick for external logging/analysis.
+    for mother in world.mothers:
+        mother._last_action = actions.get(mother) if actions.get(mother) is not None else "none"
+
     # --- Update physiology (energy/fatigue costs) ---
     for mother in world.mothers:
         moved = (prev_positions[mother] != (mother.x, mother.y))

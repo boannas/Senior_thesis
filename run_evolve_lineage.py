@@ -232,7 +232,9 @@ def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.Ra
     else:
         raise ValueError(f"Unknown fitness_mode: {fitness_mode!r}")
 
+    print(base, mean_inj)
     fitness = float(base) - float(LAMBDA_INJURY) * mean_inj
+    
     return fitness, {
         "mean_child_survival": mean_surv,
         "mean_child_ttd_norm": mean_child_ttd,

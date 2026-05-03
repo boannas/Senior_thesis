@@ -191,6 +191,7 @@ def run_single_replicate(
                 "mother_oxytocin": float(getattr(mother, "oxytocin", np.nan)) if mother is not None else np.nan,
                 "mother_cortisol": float(getattr(mother, "cortisol", np.nan)) if mother is not None else np.nan,
                 "mother_selected_motivation": getattr(mother, "selected_motivation", None) if mother is not None else None,
+                "mother_action": getattr(mother, "_last_action", None) if mother is not None else None,
                 # Plasticity diagnostics (if enabled)
                 "deficit_before": float(getattr(mother, "_last_deficit_before", np.nan)) if mother is not None else np.nan,
                 "deficit_after": float(getattr(mother, "_last_deficit_after", np.nan)) if mother is not None else np.nan,
