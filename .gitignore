@@ -23,3 +23,7 @@ run_log.csv
 /figures_agg_out_adp
 /figures_agg_out_loc
 /result_experiment
+*.csv
+*.json
+*.txt
+*.png

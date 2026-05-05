@@ -729,6 +729,8 @@ def _parse_args():
     p.add_argument("--sigma", type=float, default=DEFAULT_MUTATION_SIGMA, help="Gaussian mutation sigma for motivation weights.")
     p.add_argument("--seed-master", type=int, default=DEFAULT_SEED_MASTER, help="Master seed for deterministic evaluation batches.")
     p.add_argument("--max-ticks", type=int, default=DEFAULT_MAX_TICKS, help="Max ticks per episode.")
+    p.add_argument("--grid-w", type=int, default=DEFAULT_GRID_W, help="Grid width.")
+    p.add_argument("--grid-h", type=int, default=DEFAULT_GRID_H, help="Grid height.")
     p.add_argument("--threats", type=int, default=DEFAULT_NUM_THREATS, help="Number of threats.")
     p.add_argument("--food-start", type=int, default=DEFAULT_FOOD_AT_START, help="Food placed at start.")
     p.add_argument("--food-spawn-interval", type=int, default=DEFAULT_FOOD_SPAWN_INTERVAL, help="Food spawn interval.")
@@ -825,6 +827,8 @@ if __name__ == "__main__":
                 "mutation_sigma": float(args.sigma),
                 "seed_master": int(args.seed_master),
                 "max_ticks": int(args.max_ticks),
+                "grid_w": int(args.grid_w),
+                "grid_h": int(args.grid_h),
                 "num_threats": int(args.threats),
                 "food_at_start": int(args.food_start),
                 "food_spawn_interval": int(args.food_spawn_interval),
