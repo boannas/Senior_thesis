@@ -4,11 +4,15 @@ Single-lineage evolution from Baseline-0 genes (motivation weights = 0.5).
 Darwinian setup (as discussed):
 - Genome = mother's fixed motivation weights U (nested dict matching MotherAgent).
 - Psych weights W stay at 0.5 (same as baseline_weights branch in MotherAgent).
-- Plasticity is OFF by default (genes only); each episode uses fixed weights only.
+- Plasticity is OFF by default (genes only). For Baldwin / lifetime learning during evolution, pass e.g.
+    --plasticity outcome_adaptive --deficit-signal local --learn-w off --update-mode segment_capped
 - One lineage: propose Gaussian mutation on U; accept if mean fitness improves across seeds.
 
 Usage:
   python run_evolve_lineage.py
+  # E3 Baldwin (plasticity on during fitness rollouts; freeze w by default):
+  python run_evolve_lineage.py --plasticity outcome_adaptive --deficit-signal local --learn-w off \\
+      --update-mode segment_capped --segment-kmax 20 --episodes 32 --output-dir result_experiment/E3_baldwin
   python run_evolve_lineage.py --viz              # after evolution, open Pygame (blocks until window closed)
   python run_evolve_lineage.py --viz-only       # only open Pygame with existing final_genome.json
   python run_evolve_lineage.py --watch-every 1  # pause after each generation: Pygame shows current best (close to continue)
@@ -36,6 +40,7 @@ from datetime import datetime
 
 import numpy as np
 
+from core.policies.mother import compute_local_deficit, compute_overall_deficit
 from core.seed import init_seed
 from core.world import World
 
@@ -58,7 +63,7 @@ DEFAULT_MUTATION_SIGMA = 0.05
 DEFAULT_SEED_MASTER = 42
 
 # Plasticity: always off for this script unless explicitly overridden
-DEFAULT_PLASTICITY_RULE = None
+DEFAULT_PLASTICITY_RULE = 'outcome_adaptive'
 
 # Fitness = mean(child_survival) - LAMBDA_INJURY * mean(final child injury normalized)
 LAMBDA_INJURY = 0.002
@@ -109,6 +114,21 @@ def _set_path(d: dict, path: tuple, value: float) -> None:
     cur[path[-1]] = value
 
 
+def _mean_abs_diff_nested(a: dict, b: dict) -> float:
+    """Mean |a−b| over matching nested dict leaves (motivation u_fixed vs u_plastic)."""
+    vals = []
+    for k, v in a.items():
+        if isinstance(v, dict) and isinstance(b.get(k), dict):
+            vals.append(_mean_abs_diff_nested(v, b[k]))
+        else:
+            try:
+                vals.append(abs(float(v) - float(b.get(k, v))))
+            except (TypeError, ValueError):
+                continue
+    vals = [x for x in vals if np.isfinite(x)]
+    return float(np.mean(vals)) if vals else float("nan")
+
+
 def mutate_genome(genome: dict, rng: np.random.RandomState, sigma: float) -> dict:
     """Independent Gaussian noise on each weight; clamp to [0.05, 1.0]."""
     out = copy.deepcopy(genome)
@@ -150,9 +170,11 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
         threat_starts=threat_starts,
         seed=seed,
         day_step=int(cfg["day_step"]),
-        # Plasticity OFF unless overridden; also freeze w updates explicitly.
         plasticity_rule=cfg.get("plasticity_rule", None),
-        plasticity_learn_w=False,
+        plasticity_deficit_signal=cfg.get("plasticity_deficit_signal", "global"),
+        plasticity_learn_w=bool(cfg.get("plasticity_learn_w", False)),
+        plasticity_update_mode=cfg.get("plasticity_update_mode", "per_tick"),
+        plasticity_segment_kmax=int(cfg.get("plasticity_segment_kmax", 20)),
         food_spawn_interval=cfg.get("food_spawn_interval", None),
         food_spawn_n=int(cfg.get("food_spawn_n", 1)),
         use_fixed_weights=True,
@@ -165,11 +187,15 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
 
     child_death_tick = None
     mother_death_tick = None
+    overall_deficit_samples: list[float] = []
+    local_deficit_samples: list[float] = []
 
     for tick in range(max_ticks):
         world.step()
         if mother and mother.is_alive():
+            overall_deficit_samples.append(float(compute_overall_deficit(mother)))
             sel = getattr(mother, "selected_motivation", None)
+            local_deficit_samples.append(float(compute_local_deficit(mother, sel)))
             if sel in mot_counts:
                 mot_counts[sel] += 1
 
@@ -191,6 +217,18 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
 
     child_ttd_norm = float(child_death_tick) / float(max_ticks) if max_ticks > 0 else 0.0
     mother_ttd_norm = float(mother_death_tick) / float(max_ticks) if max_ticks > 0 else 0.0
+    u_drift_end = float("nan")
+    if mother is not None and hasattr(mother, "motivation_weights_fixed") and hasattr(mother, "motivation_weights_plastic"):
+        u_drift_end = _mean_abs_diff_nested(mother.motivation_weights_fixed, mother.motivation_weights_plastic)
+
+    def _mean_last(xs: list[float]) -> float:
+        if not xs:
+            return float("nan")
+        return float(np.mean(xs))
+
+    def _last(xs: list[float]) -> float:
+        return float(xs[-1]) if xs else float("nan")
+
     return {
         "child_survival": 1.0 if child_alive else 0.0,
         "child_injury": injury,
@@ -199,6 +237,11 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
         "child_ttd_norm": float(child_ttd_norm),
         "mother_ttd_norm": float(mother_ttd_norm),
         "mot_counts": mot_counts,
+        "u_drift_end": float(u_drift_end),
+        "mean_overall_deficit_episode": _mean_last(overall_deficit_samples),
+        "overall_deficit_end": _last(overall_deficit_samples),
+        "mean_local_deficit_episode": _mean_last(local_deficit_samples),
+        "local_deficit_end": _last(local_deficit_samples),
     }
 
 
@@ -208,12 +251,22 @@ def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.Ra
     inj = []
     child_ttd = []
     mother_ttd = []
+    u_drifts = []
+    odef_m = []
+    odef_e = []
+    ldef_m = []
+    ldef_e = []
     for s in seeds:
         r = run_episode(s, motivation_genome, cfg)
         surv.append(r["child_survival"])
         inj.append(r["child_injury"])
         child_ttd.append(r["child_ttd_norm"])
         mother_ttd.append(r["mother_ttd_norm"])
+        u_drifts.append(float(r.get("u_drift_end", float("nan"))))
+        odef_m.append(float(r.get("mean_overall_deficit_episode", float("nan"))))
+        odef_e.append(float(r.get("overall_deficit_end", float("nan"))))
+        ldef_m.append(float(r.get("mean_local_deficit_episode", float("nan"))))
+        ldef_e.append(float(r.get("local_deficit_end", float("nan"))))
     mean_surv = float(np.mean(surv))
     mean_inj = float(np.mean(inj))
     mean_child_ttd = float(np.mean(child_ttd)) if child_ttd else 0.0
@@ -232,15 +285,24 @@ def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.Ra
     else:
         raise ValueError(f"Unknown fitness_mode: {fitness_mode!r}")
 
-    print(base, mean_inj)
     fitness = float(base) - float(LAMBDA_INJURY) * mean_inj
-    
+
     return fitness, {
         "mean_child_survival": mean_surv,
         "mean_child_ttd_norm": mean_child_ttd,
         "mean_mother_ttd_norm": mean_mother_ttd,
         "mean_child_injury": mean_inj,
         "std_child_survival": float(np.std(surv)),
+        "mean_u_drift_end": float(np.nanmean(u_drifts)),
+        "std_u_drift_end": float(np.nanstd(u_drifts, ddof=0)),
+        "mean_overall_deficit_episode": float(np.nanmean(odef_m)),
+        "std_overall_deficit_episode": float(np.nanstd(odef_m, ddof=0)),
+        "mean_overall_deficit_end": float(np.nanmean(odef_e)),
+        "std_overall_deficit_end": float(np.nanstd(odef_e, ddof=0)),
+        "mean_local_deficit_episode": float(np.nanmean(ldef_m)),
+        "std_local_deficit_episode": float(np.nanstd(ldef_m, ddof=0)),
+        "mean_local_deficit_end": float(np.nanmean(ldef_e)),
+        "std_local_deficit_end": float(np.nanstd(ldef_e, ddof=0)),
     }
 
 
@@ -278,7 +340,10 @@ def build_watch_episode_payload(preview_seed: int, motivation_genome: dict, cfg:
         "seed": preview_seed,
         "day_step": int(cfg["day_step"]),
         "plasticity_rule": cfg.get("plasticity_rule", None),
-        "plasticity_learn_w": False,
+        "plasticity_deficit_signal": cfg.get("plasticity_deficit_signal", "global"),
+        "plasticity_learn_w": bool(cfg.get("plasticity_learn_w", False)),
+        "plasticity_update_mode": cfg.get("plasticity_update_mode", "per_tick"),
+        "plasticity_segment_kmax": int(cfg.get("plasticity_segment_kmax", 20)),
         "food_spawn_interval": cfg.get("food_spawn_interval", None),
         "food_spawn_n": int(cfg.get("food_spawn_n", 1)),
         "use_fixed_weights": True,
@@ -388,6 +453,10 @@ def _default_cfg() -> dict:
         "mutation_sigma": DEFAULT_MUTATION_SIGMA,
         "seed_master": DEFAULT_SEED_MASTER,
         "plasticity_rule": DEFAULT_PLASTICITY_RULE,
+        "plasticity_deficit_signal": "global",
+        "plasticity_learn_w": False,
+        "plasticity_update_mode": "per_tick",
+        "plasticity_segment_kmax": 20,
         "fitness_mode": DEFAULT_FITNESS_MODE,
         "alpha_child": DEFAULT_ALPHA_CHILD,
         "output_dir": DEFAULT_OUTPUT_DIR,
@@ -414,6 +483,16 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
             "mean_mother_ttd_norm": stats0.get("mean_mother_ttd_norm", np.nan),
             "mean_child_injury": stats0["mean_child_injury"],
             "std_child_survival": stats0["std_child_survival"],
+            "mean_u_drift_end": stats0.get("mean_u_drift_end", np.nan),
+            "std_u_drift_end": stats0.get("std_u_drift_end", np.nan),
+            "mean_overall_deficit_episode": stats0.get("mean_overall_deficit_episode", np.nan),
+            "std_overall_deficit_episode": stats0.get("std_overall_deficit_episode", np.nan),
+            "mean_overall_deficit_end": stats0.get("mean_overall_deficit_end", np.nan),
+            "std_overall_deficit_end": stats0.get("std_overall_deficit_end", np.nan),
+            "mean_local_deficit_episode": stats0.get("mean_local_deficit_episode", np.nan),
+            "std_local_deficit_episode": stats0.get("std_local_deficit_episode", np.nan),
+            "mean_local_deficit_end": stats0.get("mean_local_deficit_end", np.nan),
+            "std_local_deficit_end": stats0.get("std_local_deficit_end", np.nan),
             "mutation_sigma": 0.0,
         }
     ]
@@ -480,6 +559,16 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
                 "mean_mother_ttd_norm": stats_c.get("mean_mother_ttd_norm", np.nan),
                 "mean_child_injury": stats_c["mean_child_injury"],
                 "std_child_survival": stats_c["std_child_survival"],
+                "mean_u_drift_end": stats_c.get("mean_u_drift_end", np.nan),
+                "std_u_drift_end": stats_c.get("std_u_drift_end", np.nan),
+                "mean_overall_deficit_episode": stats_c.get("mean_overall_deficit_episode", np.nan),
+                "std_overall_deficit_episode": stats_c.get("std_overall_deficit_episode", np.nan),
+                "mean_overall_deficit_end": stats_c.get("mean_overall_deficit_end", np.nan),
+                "std_overall_deficit_end": stats_c.get("std_overall_deficit_end", np.nan),
+                "mean_local_deficit_episode": stats_c.get("mean_local_deficit_episode", np.nan),
+                "std_local_deficit_episode": stats_c.get("std_local_deficit_episode", np.nan),
+                "mean_local_deficit_end": stats_c.get("mean_local_deficit_end", np.nan),
+                "std_local_deficit_end": stats_c.get("std_local_deficit_end", np.nan),
                 "mutation_sigma": float(cfg["mutation_sigma"]),
             }
         )
@@ -505,7 +594,7 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
     summary_path = os.path.join(output_dir, "final_genome.txt")
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write(f"# evolve_lineage run {datetime.now().isoformat()}\n")
-        f.write(f"# plasticity_rule={cfg.get('plasticity_rule', None)!r} (expected None for genes-only)\n")
+        f.write(f"# plasticity_rule={cfg.get('plasticity_rule', None)!r}\n")
         f.write(f"# best_generation={best_gen}\n")
         f.write(f"best_fitness={best_fit}\n")
         f.write(repr(best_genome))
@@ -558,6 +647,8 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
     has_surv, surv = _col("mean_child_survival")
     has_cttd, cttd = _col("mean_child_ttd_norm")
     has_mttd, mttd = _col("mean_mother_ttd_norm")
+    has_ud, udrift = _col("mean_u_drift_end")
+    has_ud_std, udrift_std = _col("std_u_drift_end")
 
     best_so_far = []
     b = -1e9
@@ -578,9 +669,20 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
         if ok:
             ax0.scatter([g], [f], color="green", s=36, zorder=5, edgecolors="black", linewidths=0.5)
     ax0.set_ylabel("Fitness")
-    ax0.legend(loc="lower right", fontsize=8)
+    ax0.legend(loc="lower left", fontsize=8)
     ax0.grid(True, alpha=0.3)
     ax0.set_title("Single-lineage evolution (motivation genome)")
+    if has_ud:
+        ax0u = ax0.twinx()
+        ud_vals = [float(x) for x in udrift]
+        ax0u.plot(gens, ud_vals, "o-", color="darkmagenta", alpha=0.75, markersize=3, label="mean |Δu| at episode end")
+        if has_ud_std:
+            sds = [float(x) for x in udrift_std]
+            lo = [max(0.0, u - s) for u, s in zip(ud_vals, sds)]
+            hi = [u + s for u, s in zip(ud_vals, sds)]
+            ax0u.fill_between(gens, lo, hi, color="darkmagenta", alpha=0.12, linewidth=0)
+        ax0u.set_ylabel("Plasticity: mean |u_plas−u_fix| (eval batch)")
+        ax0u.legend(loc="upper right", fontsize=8)
 
     ax1 = axes[1]
     if has_cttd or has_mttd:
@@ -672,6 +774,36 @@ def _parse_args():
             "(same random layout rules as fitness evaluation). Close the window to continue. 0 = off."
         ),
     )
+    p.add_argument(
+        "--plasticity",
+        choices=["none", "outcome", "outcome_adaptive", "outcome_signed", "outcome_adaptive_signed"],
+        default="none",
+        help="Lifetime plasticity during each fitness episode (none = genes-only, default). E3 Baldwin: outcome_adaptive.",
+    )
+    p.add_argument(
+        "--deficit-signal",
+        choices=["global", "local"],
+        default="global",
+        help="Plasticity deficit for episodes when --plasticity is not none.",
+    )
+    p.add_argument(
+        "--learn-w",
+        choices=["on", "off"],
+        default="off",
+        help="Update psych weights w during episodes (off = only motivation u; recommended for E3).",
+    )
+    p.add_argument(
+        "--update-mode",
+        choices=["per_tick", "segment", "segment_capped"],
+        default="per_tick",
+        help="Plasticity credit assignment during episodes.",
+    )
+    p.add_argument(
+        "--segment-kmax",
+        type=int,
+        default=20,
+        help="For segment_capped: max ticks per motivation segment.",
+    )
     args = p.parse_args()
     if args.watch_every < 0:
         p.error("--watch-every must be >= 0")
@@ -685,6 +817,7 @@ if __name__ == "__main__":
         launch_pygame_visualizer(json_path)
     else:
         cfg = _default_cfg()
+        rule = None if args.plasticity == "none" else args.plasticity
         cfg.update(
             {
                 "num_generations": int(args.generations),
@@ -700,8 +833,11 @@ if __name__ == "__main__":
                 "fitness_mode": str(args.fitness_mode),
                 "alpha_child": float(args.alpha_child),
                 "checkpoint_every": int(args.checkpoint_every),
-                # keep plasticity OFF
-                "plasticity_rule": None,
+                "plasticity_rule": rule,
+                "plasticity_deficit_signal": str(args.deficit_signal),
+                "plasticity_learn_w": args.learn_w == "on",
+                "plasticity_update_mode": str(args.update_mode),
+                "plasticity_segment_kmax": int(args.segment_kmax),
             }
         )
         main(cfg, open_viz_after=args.viz, watch_every=args.watch_every)

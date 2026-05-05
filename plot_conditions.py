@@ -592,7 +592,7 @@ def main():
             mother_days.append(m[np.isfinite(m)])
 
         fig, axes = plt.subplots(1, 2, figsize=(14, 5))
-        bp0 = axes[0].boxplot(child_days, labels=cond_names, showfliers=False, patch_artist=True)
+        bp0 = axes[0].boxplot(child_days, labels=cond_names, showfliers=True, patch_artist=True)
         axes[0].set_title("Child time-to-death (median/IQR)")
         axes[0].set_ylabel("Days")
         axes[0].grid(True, axis="y", alpha=0.3)
@@ -600,7 +600,7 @@ def main():
             patch.set_facecolor(color_by_name[name])
             patch.set_alpha(0.65)
 
-        bp1 = axes[1].boxplot(mother_days, labels=cond_names, showfliers=False, patch_artist=True)
+        bp1 = axes[1].boxplot(mother_days, labels=cond_names, showfliers=True, patch_artist=True)
         axes[1].set_title("Mother time-to-death (median/IQR)")
         axes[1].set_ylabel("Days")
         axes[1].grid(True, axis="y", alpha=0.3)

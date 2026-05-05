@@ -220,7 +220,7 @@ class World:
         empty_count = total_cells - len(occupied)
 
         if empty_count <= 0:
-            print('[ERROR]: Grid is full — cannot spawn new entities')
+            # print('[ERROR]: Grid is full — cannot spawn new entities')
             return False, None, None
         return True, empty_count, occupied
 

@@ -43,6 +43,21 @@ def _child_by_slot(world, i):
     return next((c for c in world.children if c.id == cid), None)
 
 
+def _motivation_u_dicts(mother):
+    """
+    Return (fixed_nested_dict, plastic_nested_dict) for CSV flattening.
+    Supports mother-plasticity agents (u_fixed / u_plastic) and baseline MotherAgent
+    (motivation_weights_fixed / motivation_weights_plastic).
+    """
+    if mother is None:
+        return None, None
+    if hasattr(mother, "u_fixed") and hasattr(mother, "u_plastic"):
+        return mother.u_fixed, mother.u_plastic
+    if hasattr(mother, "motivation_weights_fixed") and hasattr(mother, "motivation_weights_plastic"):
+        return mother.motivation_weights_fixed, mother.motivation_weights_plastic
+    return None, None
+
+
 def build_row(world, mother_slots=None, child_slots=None):
     """Build one row dict: tick, mother vars, child vars, u/w fixed/plastic.
     Uses agent id (M0, M1, C0, ...) so columns stay fixed when agents die.
@@ -76,11 +91,13 @@ def build_row(world, mother_slots=None, child_slots=None):
             row[pre + "mot_Protect"] = ""
             for mot in ("Forage", "Care", "Self", "Protect"):
                 row[pre + "sel_" + mot] = ""
-            if ref_mother is not None and hasattr(ref_mother, "u_fixed"):
-                for k in _flat_keys(ref_mother.u_fixed, pre + "u_fixed_"):
+            uf, up = _motivation_u_dicts(ref_mother)
+            if uf is not None and up is not None:
+                for k in _flat_keys(uf, pre + "u_fixed_"):
                     row[k] = ""
-                for k in _flat_keys(ref_mother.u_plastic, pre + "u_plastic_"):
+                for k in _flat_keys(up, pre + "u_plastic_"):
                     row[k] = ""
+            if ref_mother is not None and hasattr(ref_mother, "w_fixed"):
                 for k in _flat_keys(ref_mother.w_fixed, pre + "w_fixed_"):
                     row[k] = ""
                 for k in _flat_keys(ref_mother.w_plastic, pre + "w_plastic_"):
@@ -102,10 +119,11 @@ def build_row(world, mother_slots=None, child_slots=None):
             sel = max(m.motivations, key=m.motivations.get)
             for mot in ("Forage", "Care", "Self", "Protect"):
                 row[pre + "sel_" + mot] = 1 if sel == mot else 0
-            if hasattr(m, "u_fixed"):
-                for k, v in zip(_flat_keys(m.u_fixed, pre + "u_fixed_"), _flat_vals(m.u_fixed)):
+            uf, up = _motivation_u_dicts(m)
+            if uf is not None and up is not None:
+                for k, v in zip(_flat_keys(uf, pre + "u_fixed_"), _flat_vals(uf)):
                     row[k] = v
-                for k, v in zip(_flat_keys(m.u_plastic, pre + "u_plastic_"), _flat_vals(m.u_plastic)):
+                for k, v in zip(_flat_keys(up, pre + "u_plastic_"), _flat_vals(up)):
                     row[k] = v
             if hasattr(m, "w_fixed"):
                 for k, v in zip(_flat_keys(m.w_fixed, pre + "w_fixed_"), _flat_vals(m.w_fixed)):

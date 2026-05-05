@@ -66,6 +66,8 @@ def plot_run(
     if df is None or (hasattr(df, "empty") and df.empty):
         print("No data to plot.")
         return
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
     # Ensure numeric
     for c in df.columns:
         if c == "tick":

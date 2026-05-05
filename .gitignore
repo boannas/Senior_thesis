@@ -19,3 +19,7 @@ plots/
 .cursor/
 *.log
 run_log.csv
+/figures_agg
+/figures_agg_out_adp
+/figures_agg_out_loc
+/result_experiment

@@ -65,6 +65,31 @@ def main(world_overrides=None, episode=None, window_title=None):
         grid_w = cfg["grid"]["width"]
         grid_h = cfg["grid"]["height"]
         seed = cfg["simulation"]["seed"]
+        day_step = cfg["days"]["ticks_per_day"]
+        num_threats = 1
+        food_at_start = 0
+        food_spawn_interval = None
+        food_spawn_n = 1
+
+        # Optional CLI/world overrides
+        if world_overrides:
+            if "grid_w" in world_overrides:
+                grid_w = int(world_overrides["grid_w"])
+            if "grid_h" in world_overrides:
+                grid_h = int(world_overrides["grid_h"])
+            if "seed" in world_overrides:
+                seed = int(world_overrides["seed"])
+            if "day_step" in world_overrides:
+                day_step = int(world_overrides["day_step"])
+            if "num_threats" in world_overrides:
+                num_threats = int(world_overrides["num_threats"])
+            if "food_at_start" in world_overrides:
+                food_at_start = int(world_overrides["food_at_start"])
+            if "food_spawn_interval" in world_overrides:
+                food_spawn_interval = world_overrides["food_spawn_interval"]
+            if "food_spawn_n" in world_overrides:
+                food_spawn_n = int(world_overrides["food_spawn_n"])
+
         init_seed(seed)
 
         # --- Generate random starting positions ---
@@ -77,10 +102,10 @@ def main(world_overrides=None, episode=None, window_title=None):
             n=1, grid_w=grid_w, grid_h=grid_h, occupied=occupied
         )
         threat_starts, occupied = random_unique_positions(
-            n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+            n=num_threats, grid_w=grid_w, grid_h=grid_h, occupied=occupied
         )
         food_positions, occupied = random_unique_positions(
-            n=0, grid_w=grid_w, grid_h=grid_h, occupied=occupied
+            n=food_at_start, grid_w=grid_w, grid_h=grid_h, occupied=occupied
         )
 
         world_kw = dict(
@@ -92,9 +117,16 @@ def main(world_overrides=None, episode=None, window_title=None):
             threat_starts=threat_starts,
             seed=seed,
             day_step=day_step,
+            food_spawn_interval=food_spawn_interval,
+            food_spawn_n=food_spawn_n,
         )
+        # Keep other world_overrides (e.g. baseline_weights) but do not override
+        # the position lists we just generated.
         if world_overrides:
-            world_kw.update(world_overrides)
+            for k, v in world_overrides.items():
+                if k in ("mother_starts", "child_start", "food_positions", "threat_starts"):
+                    continue
+                world_kw[k] = v
 
     # --- Colors from config ---
     bg_color = tuple(cfg["colors"]["bg"])
@@ -214,6 +246,19 @@ def _cli_overrides():
         default="outcome",
         help="Plasticity rule for the mother (default: outcome). Ignored if --episode is set.",
     )
+    parser.add_argument("--seed", type=int, default=None, help="RNG seed for layout when using --genome.")
+    parser.add_argument("--grid-w", type=int, default=None, help="Grid width when using --genome.")
+    parser.add_argument("--grid-h", type=int, default=None, help="Grid height when using --genome.")
+    parser.add_argument("--threats", type=int, default=None, help="Number of threats when using --genome.")
+    parser.add_argument("--food-start", type=int, default=None, help="Food placed at start when using --genome.")
+    parser.add_argument(
+        "--food-spawn-interval",
+        type=str,
+        default=None,
+        help="Food spawn interval ticks when using --genome. Use 'none' to disable.",
+    )
+    parser.add_argument("--food-spawn-n", type=int, default=None, help="Food spawned each interval when using --genome.")
+    parser.add_argument("--day-step", type=int, default=None, help="Ticks per day when using --genome.")
     parser.add_argument(
         "--title",
         type=str,
@@ -245,6 +290,23 @@ def _cli_overrides():
         "use_fixed_weights": True,
         "plasticity_rule": None if args.plasticity == "none" else "outcome",
     }
+    if args.seed is not None:
+        ov["seed"] = int(args.seed)
+    if args.grid_w is not None:
+        ov["grid_w"] = int(args.grid_w)
+    if args.grid_h is not None:
+        ov["grid_h"] = int(args.grid_h)
+    if args.threats is not None:
+        ov["num_threats"] = int(args.threats)
+    if args.food_start is not None:
+        ov["food_at_start"] = int(args.food_start)
+    if args.food_spawn_interval is not None:
+        s = str(args.food_spawn_interval).strip().lower()
+        ov["food_spawn_interval"] = None if s in ("none", "null", "") else int(s)
+    if args.food_spawn_n is not None:
+        ov["food_spawn_n"] = int(args.food_spawn_n)
+    if args.day_step is not None:
+        ov["day_step"] = int(args.day_step)
     return {"episode": None, "overrides": ov, "title": args.title}
 
 
