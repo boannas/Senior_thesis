@@ -129,6 +129,88 @@ def _mean_abs_diff_nested(a: dict, b: dict) -> float:
     return float(np.mean(vals)) if vals else float("nan")
 
 
+def _flat_leaf_values(d: dict) -> list[float]:
+    """Flatten a nested dict-of-dicts-of-floats to a deterministic list of leaf floats.
+
+    Used to snapshot motivation_weights_plastic cheaply each tick (no deepcopy)
+    and to compute L1 / Linf differences between consecutive snapshots.
+    """
+    out: list[float] = []
+    for k in sorted(d.keys()):
+        v = d[k]
+        if isinstance(v, dict):
+            out.extend(_flat_leaf_values(v))
+        else:
+            try:
+                out.append(float(v))
+            except (TypeError, ValueError):
+                pass
+    return out
+
+
+def _l1_diff_flat(a: list[float], b: list[float]) -> float:
+    """Sum of |a_i - b_i|, robust to length mismatch (uses min length)."""
+    n = min(len(a), len(b))
+    if n == 0:
+        return 0.0
+    s = 0.0
+    for i in range(n):
+        s += abs(a[i] - b[i])
+    return s
+
+
+_LR_DEFAULT_BASE = 0.02
+_LR_DEFAULT_MIN = 0.002
+_LR_DEFAULT_MAX = 0.05
+_LR_DEFAULT_DEFICIT_SCALE = 2.0
+
+
+def _resolve_lr_overrides(cfg: dict) -> dict | None:
+    """Compute the resolved LR overrides (or None if nothing should be overridden).
+
+    Returns a dict with keys: base, lr_min, lr_max, deficit_scale (any subset that was
+    actually requested). If the user didn't pass any --lr* flags, returns None.
+    """
+    base = cfg.get("lr_base", None)
+    lr_min = cfg.get("lr_min", None)
+    lr_max = cfg.get("lr_max", None)
+    deficit_scale = cfg.get("lr_deficit_scale", None)
+    scale = cfg.get("lr_scale", None)
+
+    if base is None and lr_min is None and lr_max is None and deficit_scale is None and scale is None:
+        return None
+
+    eff_base = float(base) if base is not None else _LR_DEFAULT_BASE
+    eff_min = float(lr_min) if lr_min is not None else _LR_DEFAULT_MIN
+    eff_max = float(lr_max) if lr_max is not None else _LR_DEFAULT_MAX
+    eff_dscale = float(deficit_scale) if deficit_scale is not None else _LR_DEFAULT_DEFICIT_SCALE
+
+    if scale is not None:
+        s = float(scale)
+        eff_base *= s
+        eff_min *= s
+        eff_max *= s
+
+    return {
+        "base": eff_base,
+        "lr_min": eff_min,
+        "lr_max": eff_max,
+        "deficit_scale": eff_dscale,
+    }
+
+
+def _apply_lr_overrides_to_mothers(mothers, cfg: dict) -> None:
+    """Apply --lr* overrides to every mother in the world (no-op if not requested)."""
+    overrides = _resolve_lr_overrides(cfg)
+    if overrides is None:
+        return
+    for m in mothers:
+        m.learning_rate = float(overrides["base"])
+        m.learning_rate_min = float(overrides["lr_min"])
+        m.learning_rate_max = float(overrides["lr_max"])
+        m.learning_deficit_scale = float(overrides["deficit_scale"])
+
+
 def mutate_genome(genome: dict, rng: np.random.RandomState, sigma: float) -> dict:
     """Independent Gaussian noise on each weight; clamp to [0.05, 1.0]."""
     out = copy.deepcopy(genome)
@@ -181,6 +263,8 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
         baseline_weights=copy.deepcopy(motivation_genome),
     )
 
+    _apply_lr_overrides_to_mothers(world.mothers, cfg)
+
     mother = world.mothers[0]
     child = world.children[0]
     mot_counts = {"Forage": 0, "Care": 0, "Self": 0, "Protect": 0}
@@ -189,6 +273,16 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
     mother_death_tick = None
     overall_deficit_samples: list[float] = []
     local_deficit_samples: list[float] = []
+    # Plastic-activity diagnostics (Baldwin "panic and learn, then assimilate")
+    du_plastic_samples: list[float] = []
+    lr_eff_samples: list[float] = []
+    u_drift_samples: list[float] = []
+    plastic_active_ticks = 0
+
+    plasticity_on = mother is not None and hasattr(mother, "motivation_weights_plastic")
+    prev_flat: list[float] | None = (
+        _flat_leaf_values(mother.motivation_weights_plastic) if plasticity_on else None
+    )
 
     for tick in range(max_ticks):
         world.step()
@@ -198,6 +292,30 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
             local_deficit_samples.append(float(compute_local_deficit(mother, sel)))
             if sel in mot_counts:
                 mot_counts[sel] += 1
+
+            if plasticity_on:
+                cur_flat = _flat_leaf_values(mother.motivation_weights_plastic)
+                if prev_flat is not None:
+                    du = _l1_diff_flat(cur_flat, prev_flat)
+                    du_plastic_samples.append(du)
+                    if du > 0.0:
+                        plastic_active_ticks += 1
+                prev_flat = cur_flat
+
+                lr_eff_attr = getattr(mother, "_last_learning_rate_eff", None)
+                if lr_eff_attr is not None:
+                    try:
+                        lr_eff_samples.append(float(lr_eff_attr))
+                    except (TypeError, ValueError):
+                        pass
+
+                if hasattr(mother, "motivation_weights_fixed"):
+                    u_drift_samples.append(
+                        _mean_abs_diff_nested(
+                            mother.motivation_weights_fixed,
+                            mother.motivation_weights_plastic,
+                        )
+                    )
 
         # record first death times (if any)
         if child_death_tick is None and (not child or not child.is_alive()):
@@ -229,6 +347,17 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
     def _last(xs: list[float]) -> float:
         return float(xs[-1]) if xs else float("nan")
 
+    def _safe_max(xs: list[float]) -> float:
+        finite = [x for x in xs if np.isfinite(x)]
+        return float(max(finite)) if finite else float("nan")
+
+    n_ticks_lived = max(1, len(du_plastic_samples))
+    plastic_active_frac = (
+        float(plastic_active_ticks) / float(n_ticks_lived)
+        if du_plastic_samples
+        else float("nan")
+    )
+
     return {
         "child_survival": 1.0 if child_alive else 0.0,
         "child_injury": injury,
@@ -242,6 +371,12 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
         "overall_deficit_end": _last(overall_deficit_samples),
         "mean_local_deficit_episode": _mean_last(local_deficit_samples),
         "local_deficit_end": _last(local_deficit_samples),
+        # Baldwin-effect plastic-activity diagnostics:
+        "mean_du_plastic_episode": _mean_last(du_plastic_samples),
+        "peak_du_plastic_episode": _safe_max(du_plastic_samples),
+        "plastic_active_frac": plastic_active_frac,
+        "mean_lr_eff_episode": _mean_last(lr_eff_samples),
+        "peak_u_drift_episode": _safe_max(u_drift_samples),
     }
 
 
@@ -256,6 +391,12 @@ def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.Ra
     odef_e = []
     ldef_m = []
     ldef_e = []
+    # Plastic-activity diagnostics (per-episode samples)
+    du_plast_m: list[float] = []
+    du_plast_p: list[float] = []
+    plast_active_f: list[float] = []
+    lr_eff_m: list[float] = []
+    u_drift_peak: list[float] = []
     for s in seeds:
         r = run_episode(s, motivation_genome, cfg)
         surv.append(r["child_survival"])
@@ -267,6 +408,11 @@ def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.Ra
         odef_e.append(float(r.get("overall_deficit_end", float("nan"))))
         ldef_m.append(float(r.get("mean_local_deficit_episode", float("nan"))))
         ldef_e.append(float(r.get("local_deficit_end", float("nan"))))
+        du_plast_m.append(float(r.get("mean_du_plastic_episode", float("nan"))))
+        du_plast_p.append(float(r.get("peak_du_plastic_episode", float("nan"))))
+        plast_active_f.append(float(r.get("plastic_active_frac", float("nan"))))
+        lr_eff_m.append(float(r.get("mean_lr_eff_episode", float("nan"))))
+        u_drift_peak.append(float(r.get("peak_u_drift_episode", float("nan"))))
     mean_surv = float(np.mean(surv))
     mean_inj = float(np.mean(inj))
     mean_child_ttd = float(np.mean(child_ttd)) if child_ttd else 0.0
@@ -303,6 +449,17 @@ def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.Ra
         "std_local_deficit_episode": float(np.nanstd(ldef_m, ddof=0)),
         "mean_local_deficit_end": float(np.nanmean(ldef_e)),
         "std_local_deficit_end": float(np.nanstd(ldef_e, ddof=0)),
+        # Baldwin plastic-activity diagnostics (mean/std over evaluation seeds)
+        "mean_du_plastic_episode": float(np.nanmean(du_plast_m)) if du_plast_m else float("nan"),
+        "std_du_plastic_episode": float(np.nanstd(du_plast_m, ddof=0)) if du_plast_m else float("nan"),
+        "mean_peak_du_plastic_episode": float(np.nanmean(du_plast_p)) if du_plast_p else float("nan"),
+        "std_peak_du_plastic_episode": float(np.nanstd(du_plast_p, ddof=0)) if du_plast_p else float("nan"),
+        "mean_plastic_active_frac": float(np.nanmean(plast_active_f)) if plast_active_f else float("nan"),
+        "std_plastic_active_frac": float(np.nanstd(plast_active_f, ddof=0)) if plast_active_f else float("nan"),
+        "mean_lr_eff_episode": float(np.nanmean(lr_eff_m)) if lr_eff_m else float("nan"),
+        "std_lr_eff_episode": float(np.nanstd(lr_eff_m, ddof=0)) if lr_eff_m else float("nan"),
+        "mean_peak_u_drift_episode": float(np.nanmean(u_drift_peak)) if u_drift_peak else float("nan"),
+        "std_peak_u_drift_episode": float(np.nanstd(u_drift_peak, ddof=0)) if u_drift_peak else float("nan"),
     }
 
 
@@ -457,6 +614,11 @@ def _default_cfg() -> dict:
         "plasticity_learn_w": False,
         "plasticity_update_mode": "per_tick",
         "plasticity_segment_kmax": 20,
+        "lr_base": None,
+        "lr_min": None,
+        "lr_max": None,
+        "lr_deficit_scale": None,
+        "lr_scale": None,
         "fitness_mode": DEFAULT_FITNESS_MODE,
         "alpha_child": DEFAULT_ALPHA_CHILD,
         "output_dir": DEFAULT_OUTPUT_DIR,
@@ -477,6 +639,22 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
         print(
             f"[threats schedule] base={base_threats}  steps="
             + ", ".join(f"gen{g}->{n}" for g, n in threats_schedule)
+        )
+
+    lr_overrides = _resolve_lr_overrides(cfg)
+    if lr_overrides is not None:
+        print(
+            f"[learning-rate override] base={lr_overrides['base']:.6g} "
+            f"lr_min={lr_overrides['lr_min']:.6g} "
+            f"lr_max={lr_overrides['lr_max']:.6g} "
+            f"deficit_scale={lr_overrides['deficit_scale']:.6g}"
+            + (f"  (scale={cfg.get('lr_scale')})" if cfg.get("lr_scale") is not None else "")
+        )
+    else:
+        print(
+            f"[learning-rate] defaults: base={_LR_DEFAULT_BASE} "
+            f"lr_min={_LR_DEFAULT_MIN} lr_max={_LR_DEFAULT_MAX} "
+            f"deficit_scale={_LR_DEFAULT_DEFICIT_SCALE}"
         )
 
     cfg["num_threats"] = _threats_at_gen(gen_id, threats_schedule, base_threats)
@@ -504,6 +682,16 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
             "std_local_deficit_episode": stats0.get("std_local_deficit_episode", np.nan),
             "mean_local_deficit_end": stats0.get("mean_local_deficit_end", np.nan),
             "std_local_deficit_end": stats0.get("std_local_deficit_end", np.nan),
+            "mean_du_plastic_episode": stats0.get("mean_du_plastic_episode", np.nan),
+            "std_du_plastic_episode": stats0.get("std_du_plastic_episode", np.nan),
+            "mean_peak_du_plastic_episode": stats0.get("mean_peak_du_plastic_episode", np.nan),
+            "std_peak_du_plastic_episode": stats0.get("std_peak_du_plastic_episode", np.nan),
+            "mean_plastic_active_frac": stats0.get("mean_plastic_active_frac", np.nan),
+            "std_plastic_active_frac": stats0.get("std_plastic_active_frac", np.nan),
+            "mean_lr_eff_episode": stats0.get("mean_lr_eff_episode", np.nan),
+            "std_lr_eff_episode": stats0.get("std_lr_eff_episode", np.nan),
+            "mean_peak_u_drift_episode": stats0.get("mean_peak_u_drift_episode", np.nan),
+            "std_peak_u_drift_episode": stats0.get("std_peak_u_drift_episode", np.nan),
             "mutation_sigma": 0.0,
         }
     ]
@@ -587,6 +775,16 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
                 "std_local_deficit_episode": stats_c.get("std_local_deficit_episode", np.nan),
                 "mean_local_deficit_end": stats_c.get("mean_local_deficit_end", np.nan),
                 "std_local_deficit_end": stats_c.get("std_local_deficit_end", np.nan),
+                "mean_du_plastic_episode": stats_c.get("mean_du_plastic_episode", np.nan),
+                "std_du_plastic_episode": stats_c.get("std_du_plastic_episode", np.nan),
+                "mean_peak_du_plastic_episode": stats_c.get("mean_peak_du_plastic_episode", np.nan),
+                "std_peak_du_plastic_episode": stats_c.get("std_peak_du_plastic_episode", np.nan),
+                "mean_plastic_active_frac": stats_c.get("mean_plastic_active_frac", np.nan),
+                "std_plastic_active_frac": stats_c.get("std_plastic_active_frac", np.nan),
+                "mean_lr_eff_episode": stats_c.get("mean_lr_eff_episode", np.nan),
+                "std_lr_eff_episode": stats_c.get("std_lr_eff_episode", np.nan),
+                "mean_peak_u_drift_episode": stats_c.get("mean_peak_u_drift_episode", np.nan),
+                "std_peak_u_drift_episode": stats_c.get("std_peak_u_drift_episode", np.nan),
                 "mutation_sigma": float(cfg["mutation_sigma"]),
             }
         )
@@ -895,6 +1093,56 @@ def _parse_args():
         default=20,
         help="For segment_capped: max ticks per motivation segment.",
     )
+    p.add_argument(
+        "--lr",
+        type=float,
+        default=None,
+        metavar="FLOAT",
+        help=(
+            "Override base learning rate used by 'outcome' / 'outcome_signed' rules "
+            f"(default {_LR_DEFAULT_BASE}). Also seeds the start of the adaptive range."
+        ),
+    )
+    p.add_argument(
+        "--lr-min",
+        type=float,
+        default=None,
+        metavar="FLOAT",
+        help=(
+            "Override learning_rate_min for 'outcome_adaptive*' "
+            f"(default {_LR_DEFAULT_MIN})."
+        ),
+    )
+    p.add_argument(
+        "--lr-max",
+        type=float,
+        default=None,
+        metavar="FLOAT",
+        help=(
+            "Override learning_rate_max for 'outcome_adaptive*' "
+            f"(default {_LR_DEFAULT_MAX})."
+        ),
+    )
+    p.add_argument(
+        "--lr-deficit-scale",
+        type=float,
+        default=None,
+        metavar="FLOAT",
+        help=(
+            "Override deficit-saturation point for adaptive LR "
+            f"(default {_LR_DEFAULT_DEFICIT_SCALE})."
+        ),
+    )
+    p.add_argument(
+        "--lr-scale",
+        type=float,
+        default=None,
+        metavar="FACTOR",
+        help=(
+            "Convenience multiplier applied to the resolved LR values (lr, lr-min, lr-max). "
+            "E.g. --lr-scale 0.1 makes all learning rates 10x smaller; 0.01 = 100x smaller."
+        ),
+    )
     args = p.parse_args()
     if args.watch_every < 0:
         p.error("--watch-every must be >= 0")
@@ -936,6 +1184,11 @@ if __name__ == "__main__":
                 "plasticity_learn_w": args.learn_w == "on",
                 "plasticity_update_mode": str(args.update_mode),
                 "plasticity_segment_kmax": int(args.segment_kmax),
+                "lr_base": (None if args.lr is None else float(args.lr)),
+                "lr_min": (None if args.lr_min is None else float(args.lr_min)),
+                "lr_max": (None if args.lr_max is None else float(args.lr_max)),
+                "lr_deficit_scale": (None if args.lr_deficit_scale is None else float(args.lr_deficit_scale)),
+                "lr_scale": (None if args.lr_scale is None else float(args.lr_scale)),
             }
         )
         main(cfg, open_viz_after=args.viz, watch_every=args.watch_every)

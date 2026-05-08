@@ -75,7 +75,12 @@ RUN_NAME_RE = re.compile(
 
 METRIC_INFO = {
     "fitness": {"col": "fitness", "ylabel": "Fitness"},
-    "u_drift": {"col": "mean_u_drift_end", "ylabel": "Mean |u_plastic − u_fixed|"},
+    "u_drift": {"col": "mean_u_drift_end", "ylabel": "Mean |u_plastic − u_fixed| (end)"},
+    "u_drift_peak": {"col": "mean_peak_u_drift_episode", "ylabel": "Peak |u_plastic − u_fixed| (within ep)"},
+    "du_plastic": {"col": "mean_du_plastic_episode", "ylabel": "Mean L1 |Δu_plastic| per tick"},
+    "du_plastic_peak": {"col": "mean_peak_du_plastic_episode", "ylabel": "Peak L1 |Δu_plastic| per tick"},
+    "plastic_active_frac": {"col": "mean_plastic_active_frac", "ylabel": "Plastic-active fraction of ticks"},
+    "lr_eff": {"col": "mean_lr_eff_episode", "ylabel": "Mean effective learning rate"},
     "child_survival": {"col": "mean_child_survival", "ylabel": "Mean child survival (eval batch)"},
     "child_ttd": {"col": "mean_child_ttd_norm", "ylabel": "Child TTD (normalized)"},
     "mother_ttd": {"col": "mean_mother_ttd_norm", "ylabel": "Mother TTD (normalized)"},
