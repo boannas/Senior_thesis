@@ -471,6 +471,16 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
     genome = baseline_zero_motivation_genome()
     gen_id = 0
 
+    threats_schedule: list[tuple[int, int]] = list(cfg.get("threats_schedule", []) or [])
+    base_threats = int(cfg.get("num_threats", DEFAULT_NUM_THREATS))
+    if threats_schedule:
+        print(
+            f"[threats schedule] base={base_threats}  steps="
+            + ", ".join(f"gen{g}->{n}" for g, n in threats_schedule)
+        )
+
+    cfg["num_threats"] = _threats_at_gen(gen_id, threats_schedule, base_threats)
+    active_threats_now = int(cfg["num_threats"])
     seeds0 = episode_seeds(0, seed_master=int(cfg["seed_master"]), episodes_per_eval=int(cfg["episodes_per_eval"]))
     fit, stats0 = evaluate_genome(genome, seeds0, rng, cfg)
     rows = [
@@ -478,6 +488,7 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
             "generation": gen_id,
             "fitness": fit,
             "accepted": True,
+            "num_threats_active": active_threats_now,
             "mean_child_survival": stats0["mean_child_survival"],
             "mean_child_ttd_norm": stats0.get("mean_child_ttd_norm", np.nan),
             "mean_mother_ttd_norm": stats0.get("mean_mother_ttd_norm", np.nan),
@@ -533,6 +544,12 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
         _write_checkpoint(gen_id, best_fit, best_genome)
 
     for gen_id in range(1, int(cfg["num_generations"]) + 1):
+        new_threats = _threats_at_gen(gen_id, threats_schedule, base_threats)
+        if new_threats != int(cfg["num_threats"]):
+            print(f"[gen {gen_id}] threats: {int(cfg['num_threats'])} -> {new_threats}")
+        cfg["num_threats"] = new_threats
+        active_threats_now = int(cfg["num_threats"])
+
         candidate = mutate_genome(best_genome, rng, float(cfg["mutation_sigma"]))
         seeds = episode_seeds(gen_id, seed_master=int(cfg["seed_master"]), episodes_per_eval=int(cfg["episodes_per_eval"]))
         fit_c, stats_c = evaluate_genome(candidate, seeds, rng, cfg)
@@ -554,6 +571,7 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
                 "generation": gen_id,
                 "fitness": fit_c,
                 "accepted": accepted,
+                "num_threats_active": active_threats_now,
                 "mean_child_survival": stats_c["mean_child_survival"],
                 "mean_child_ttd_norm": stats_c.get("mean_child_ttd_norm", np.nan),
                 "mean_mother_ttd_norm": stats_c.get("mean_mother_ttd_norm", np.nan),
@@ -722,6 +740,64 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
     print(f"Wrote {out_png}")
 
 
+def _parse_threats_schedule(spec: str | None) -> list[tuple[int, int]]:
+    """Parse a "gen:threats,gen:threats,..." schedule.
+
+    Returns a list of (start_generation, num_threats) tuples sorted ascending by
+    start_generation. Active threat count for a generation g is the value from
+    the entry with the largest start_generation <= g (stepwise / "last seen
+    wins"). Anything before the first start_generation falls back to the CLI
+    --threats default.
+
+    Example: "0:0,500:1,1000:2" means threats=0 for [0..499], 1 for [500..999],
+    2 for [1000..end].
+    """
+    if spec is None or not str(spec).strip():
+        return []
+    out: list[tuple[int, int]] = []
+    raw = str(spec).replace(";", ",")
+    for chunk in raw.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        if ":" not in chunk:
+            raise ValueError(
+                f"--threats-schedule entry '{chunk}' must be 'gen:threats' (e.g. '500:1')"
+            )
+        g_str, n_str = chunk.split(":", 1)
+        try:
+            g = int(g_str.strip())
+            n = int(n_str.strip())
+        except ValueError as e:
+            raise ValueError(
+                f"--threats-schedule entry '{chunk}' must be integers 'gen:threats'"
+            ) from e
+        if g < 0 or n < 0:
+            raise ValueError(
+                f"--threats-schedule entry '{chunk}' must have non-negative gen and threats"
+            )
+        out.append((g, n))
+    out.sort(key=lambda t: t[0])
+    return out
+
+
+def _threats_at_gen(
+    gen_id: int,
+    schedule: list[tuple[int, int]],
+    default_n: int,
+) -> int:
+    """Return active threat count at gen_id given a schedule (stepwise / hold)."""
+    if not schedule:
+        return int(default_n)
+    n = int(default_n)
+    for start_g, count in schedule:
+        if gen_id >= start_g:
+            n = int(count)
+        else:
+            break
+    return n
+
+
 def _parse_args():
     p = argparse.ArgumentParser(description="Single-lineage evolution of motivation weights.")
     p.add_argument("--generations", type=int, default=DEFAULT_NUM_GENERATIONS, help="Number of generations.")
@@ -731,7 +807,20 @@ def _parse_args():
     p.add_argument("--max-ticks", type=int, default=DEFAULT_MAX_TICKS, help="Max ticks per episode.")
     p.add_argument("--grid-w", type=int, default=DEFAULT_GRID_W, help="Grid width.")
     p.add_argument("--grid-h", type=int, default=DEFAULT_GRID_H, help="Grid height.")
-    p.add_argument("--threats", type=int, default=DEFAULT_NUM_THREATS, help="Number of threats.")
+    p.add_argument("--threats", type=int, default=DEFAULT_NUM_THREATS, help="Number of threats (used when --threats-schedule is empty or before first scheduled generation).")
+    p.add_argument(
+        "--threats-schedule",
+        type=str,
+        default="",
+        metavar="GEN:N[,GEN:N,...]",
+        help=(
+            "Stepwise schedule for the number of threats vs. generation. "
+            "Format: 'gen:threats' pairs separated by commas (or semicolons). "
+            "Example: '0:0,500:1,1000:2' = 0 threats from gen 0-499, 1 threat from gen 500-999, "
+            "2 threats from gen 1000+. The schedule overrides --threats whenever an entry "
+            "applies; before the first entry, --threats is used."
+        ),
+    )
     p.add_argument("--food-start", type=int, default=DEFAULT_FOOD_AT_START, help="Food placed at start.")
     p.add_argument("--food-spawn-interval", type=int, default=DEFAULT_FOOD_SPAWN_INTERVAL, help="Food spawn interval.")
     p.add_argument("--food-spawn-n", type=int, default=DEFAULT_FOOD_SPAWN_N, help="Food spawned each interval.")
@@ -809,6 +898,10 @@ def _parse_args():
     args = p.parse_args()
     if args.watch_every < 0:
         p.error("--watch-every must be >= 0")
+    try:
+        args.threats_schedule_parsed = _parse_threats_schedule(args.threats_schedule)
+    except ValueError as e:
+        p.error(str(e))
     return args
 
 
@@ -830,6 +923,7 @@ if __name__ == "__main__":
                 "grid_w": int(args.grid_w),
                 "grid_h": int(args.grid_h),
                 "num_threats": int(args.threats),
+                "threats_schedule": list(args.threats_schedule_parsed),
                 "food_at_start": int(args.food_start),
                 "food_spawn_interval": int(args.food_spawn_interval),
                 "food_spawn_n": int(args.food_spawn_n),
