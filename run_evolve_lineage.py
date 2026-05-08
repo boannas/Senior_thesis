@@ -1,29 +1,52 @@
 """
-Single-lineage evolution from Baseline-0 genes (motivation weights = 0.5).
+Single-lineage evolution of motivation weights (mother).
 
-Darwinian setup (as discussed):
+Darwinian setup:
 - Genome = mother's fixed motivation weights U (nested dict matching MotherAgent).
-- Psych weights W stay at 0.5 (same as baseline_weights branch in MotherAgent).
-- Plasticity is OFF by default (genes only). For Baldwin / lifetime learning during evolution, pass e.g.
+- Psych weights W stay at the hard-coded defaults (genes-only evolution on U).
+- Plasticity is OFF by default. For Baldwin / lifetime learning during evolution:
     --plasticity outcome_adaptive --deficit-signal local --learn-w off --update-mode segment_capped
 - One lineage: propose Gaussian mutation on U; accept if mean fitness improves across seeds.
 
+Initialization modes (--init-mode):
+- baseline_zero   : all 13 weights = 0.5 (legacy default; mother starts moderately functional)
+- random_uniform  : every weight ~ U(init_low, init_high) [reproducible via --init-seed]
+- anti_maternal   : Care/Protect weights LOW, Self/Forage weights HIGH (de novo emergence test)
+- pro_maternal    : Care/Protect weights HIGH (control: starts already maternal)
+- from_json       : load genome from --init-from PATH
+
+Reproducibility:
+- All RNGs are derived from --seed-master (and --init-seed for genome init only).
+- The full run is captured in run_config.json (CLI, cfg, python, git hash) and init_genome.json.
+- --checkpoint-every N saves best-genome snapshots to checkpoints/ for later non-learner tests.
+
+Logging (per generation, to lineage_generations.csv):
+- Fitness, child/mother TTD, child survival, child injury
+- Plasticity diagnostics (u_drift, du_plastic, lr_eff, plastic_active_frac, peak_u_drift)
+- Behavior fractions: frac_forage, frac_care, frac_self, frac_protect, maternal_fraction
+- Candidate genome weights flattened: u_forage_child_hunger, ..., u_protect_bonding
+- Active number of threats (supports --threats-schedule for non-stationary runs)
+
 Usage:
   python run_evolve_lineage.py
-  # E3 Baldwin (plasticity on during fitness rollouts; freeze w by default):
-  python run_evolve_lineage.py --plasticity outcome_adaptive --deficit-signal local --learn-w off \\
-      --update-mode segment_capped --segment-kmax 20 --episodes 32 --output-dir result_experiment/E3_baldwin
+  python run_evolve_lineage.py --plasticity outcome_adaptive --deficit-signal global --learn-w off \\
+      --update-mode per_tick --episodes 10 --output-dir results/E3_baldwin
+  python run_evolve_lineage.py --init-mode anti_maternal --init-seed 7 --init-noise 0.05
   python run_evolve_lineage.py --viz              # after evolution, open Pygame (blocks until window closed)
-  python run_evolve_lineage.py --viz-only       # only open Pygame with existing final_genome.json
-  python run_evolve_lineage.py --watch-every 1  # pause after each generation: Pygame shows current best (close to continue)
+  python run_evolve_lineage.py --viz-only         # only open Pygame with existing final_genome.json
+  python run_evolve_lineage.py --watch-every 1    # pause after each generation: Pygame shows current best
 
-Outputs:
-  test_results/evolve_lineage/lineage_generations.csv
-  test_results/evolve_lineage/lineage_plot.png  (if matplotlib available)
-  test_results/evolve_lineage/final_genome.json  (for Pygame: --genome)
+Outputs (in --output-dir):
+  lineage_generations.csv
+  lineage_plot.png            (if matplotlib available)
+  init_genome.json            (gen-0 starting genome, for reproducibility)
+  final_genome.json           (best genome found; for Pygame: --genome)
+  final_genome.txt            (human-readable summary)
+  run_config.json             (CLI args, cfg, python version, best-effort git hash)
+  checkpoints/best_genXXXX.json   (if --checkpoint-every > 0)
 
 Pygame after a run:
-  python -m core.ui.pygame_viewer --genome test_results/evolve_lineage/final_genome.json
+  python -m core.ui.pygame_viewer --genome <output_dir>/final_genome.json
 """
 
 from __future__ import annotations
@@ -96,6 +119,195 @@ def baseline_zero_motivation_genome() -> dict:
             "bonding": 0.5,
         },
     }
+
+
+# Min/max for the genome clamp window (matches mutate_genome's clamp).
+_GENOME_LO = 0.05
+_GENOME_HI = 1.0
+
+
+def _empty_motivation_genome() -> dict:
+    """An empty (all-NaN-equivalent) motivation skeleton used for initialization templates."""
+    return {
+        "forage": {"child_hunger": 0.0, "energy_deficit": 0.0, "low_fear": 0.0},
+        "care": {"child_warmth": 0.0, "closeness_deficit": 0.0, "bonding": 0.0},
+        "self": {"fatigue": 0.0, "fear": 0.0, "stress": 0.0},
+        "protect": {
+            "child_injury": 0.0,
+            "fear": 0.0,
+            "closeness_deficit": 0.0,
+            "bonding": 0.0,
+        },
+    }
+
+
+def _clamp_genome(g: dict, lo: float = _GENOME_LO, hi: float = _GENOME_HI) -> dict:
+    """Clamp every leaf weight to [lo, hi]."""
+    out = copy.deepcopy(g)
+    for path, v in _flatten_keys(out):
+        _set_path(out, path, max(lo, min(hi, float(v))))
+    return out
+
+
+def _add_noise_to_genome(g: dict, rng: np.random.RandomState, sigma: float) -> dict:
+    """Add Gaussian N(0, sigma) noise to each weight, then clamp."""
+    if sigma <= 0.0:
+        return copy.deepcopy(g)
+    out = copy.deepcopy(g)
+    for path, v in _flatten_keys(out):
+        _set_path(out, path, float(v) + float(rng.normal(0.0, sigma)))
+    return _clamp_genome(out)
+
+
+def random_uniform_motivation_genome(
+    rng: np.random.RandomState,
+    low: float = _GENOME_LO,
+    high: float = _GENOME_HI,
+) -> dict:
+    """Every motivation weight is independently sampled from U(low, high)."""
+    g = _empty_motivation_genome()
+    for path, _ in _flatten_keys(g):
+        _set_path(g, path, float(rng.uniform(low, high)))
+    return g
+
+
+def anti_maternal_motivation_genome() -> dict:
+    """Mother starts non-maternal: low Care/Protect, high Self/Forage-self.
+
+    Use to test *de novo* emergence of maternal behavior under selection
+    (the question of interest is whether evolution + plasticity moves the
+    lineage toward a maternal phenotype starting from an actively
+    self-prioritizing prior).
+    """
+    return {
+        "forage": {"child_hunger": 0.10, "energy_deficit": 0.90, "low_fear": 0.50},
+        "care": {"child_warmth": 0.10, "closeness_deficit": 0.10, "bonding": 0.10},
+        "self": {"fatigue": 0.90, "fear": 0.90, "stress": 0.90},
+        "protect": {
+            "child_injury": 0.10,
+            "fear": 0.10,
+            "closeness_deficit": 0.10,
+            "bonding": 0.10,
+        },
+    }
+
+
+def pro_maternal_motivation_genome() -> dict:
+    """Mother starts already maternal: high Care/Protect, moderate Self.
+
+    Useful as a CONTROL for the anti_maternal condition: if both reach the
+    same asymptote, that is evidence the model converges to the maternal
+    attractor regardless of initial state.
+    """
+    return {
+        "forage": {"child_hunger": 0.90, "energy_deficit": 0.50, "low_fear": 0.50},
+        "care": {"child_warmth": 0.90, "closeness_deficit": 0.90, "bonding": 0.90},
+        "self": {"fatigue": 0.30, "fear": 0.30, "stress": 0.30},
+        "protect": {
+            "child_injury": 0.90,
+            "fear": 0.50,
+            "closeness_deficit": 0.90,
+            "bonding": 0.90,
+        },
+    }
+
+
+def _load_genome_json(path: str) -> dict:
+    """Load a motivation genome from a JSON file. Validates against the canonical shape."""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"--init-from JSON must be a dict, got {type(data).__name__}")
+    template = baseline_zero_motivation_genome()
+    out = _empty_motivation_genome()
+    for cat, leaves in template.items():
+        if cat not in data or not isinstance(data[cat], dict):
+            raise ValueError(f"--init-from JSON missing category '{cat}'")
+        for k in leaves.keys():
+            if k not in data[cat]:
+                raise ValueError(f"--init-from JSON missing key '{cat}.{k}'")
+            out[cat][k] = float(data[cat][k])
+    return _clamp_genome(out)
+
+
+def initialize_genome(
+    init_mode: str,
+    init_seed: int,
+    init_noise: float = 0.0,
+    init_from: str | None = None,
+    init_low: float = _GENOME_LO,
+    init_high: float = _GENOME_HI,
+) -> dict:
+    """Build the gen-0 genome based on --init-mode and friends.
+
+    Parameters
+    ----------
+    init_mode : one of {"baseline_zero", "random_uniform", "anti_maternal",
+                         "pro_maternal", "from_json"}
+    init_seed : RNG seed used only by random_uniform and by the init_noise
+                jitter on the deterministic templates. Independent of seed_master
+                so the user can vary init seed across replicates without breaking
+                evaluation reproducibility.
+    init_noise : Gaussian sigma added to every weight after the template is
+                 chosen (no-op if 0.0). Only applied to template-based modes
+                 (baseline_zero / anti_maternal / pro_maternal / from_json).
+    init_from : JSON path used iff init_mode == "from_json".
+    init_low / init_high : range for random_uniform mode.
+    """
+    rng = np.random.RandomState(int(init_seed))
+    mode = str(init_mode).lower()
+
+    if mode == "baseline_zero":
+        g = baseline_zero_motivation_genome()
+    elif mode == "random_uniform":
+        g = random_uniform_motivation_genome(rng, low=float(init_low), high=float(init_high))
+    elif mode == "anti_maternal":
+        g = anti_maternal_motivation_genome()
+    elif mode == "pro_maternal":
+        g = pro_maternal_motivation_genome()
+    elif mode == "from_json":
+        if not init_from:
+            raise ValueError("--init-mode from_json requires --init-from PATH")
+        g = _load_genome_json(str(init_from))
+    else:
+        raise ValueError(f"Unknown --init-mode: {init_mode!r}")
+
+    if init_noise and init_noise > 0.0 and mode != "random_uniform":
+        g = _add_noise_to_genome(g, rng, float(init_noise))
+
+    return _clamp_genome(g)
+
+
+# Stable, deterministic order for genome leaves (used to flatten u_fix into CSV columns).
+_GENOME_LEAVES_ORDER: list[tuple[str, str]] = [
+    ("forage", "child_hunger"),
+    ("forage", "energy_deficit"),
+    ("forage", "low_fear"),
+    ("care", "child_warmth"),
+    ("care", "closeness_deficit"),
+    ("care", "bonding"),
+    ("self", "fatigue"),
+    ("self", "fear"),
+    ("self", "stress"),
+    ("protect", "child_injury"),
+    ("protect", "fear"),
+    ("protect", "closeness_deficit"),
+    ("protect", "bonding"),
+]
+
+
+def _genome_to_flat_columns(g: dict) -> dict:
+    """Flatten a motivation genome dict to {'u_forage_child_hunger': 0.5, ...}."""
+    out: dict[str, float] = {}
+    for cat, leaf in _GENOME_LEAVES_ORDER:
+        try:
+            out[f"u_{cat}_{leaf}"] = float(g[cat][leaf])
+        except (KeyError, TypeError, ValueError):
+            out[f"u_{cat}_{leaf}"] = float("nan")
+    return out
+
+
+_GENOME_FLAT_COLUMN_NAMES: list[str] = [f"u_{c}_{k}" for c, k in _GENOME_LEAVES_ORDER]
 
 
 def _flatten_keys(d: dict, prefix=()):
@@ -358,6 +570,14 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
         else float("nan")
     )
 
+    # Behavior fractions: how much time (alive ticks) the mother spent in each motivation.
+    total_mot_ticks = max(1, sum(int(v) for v in mot_counts.values()))
+    frac_forage = float(mot_counts.get("Forage", 0)) / float(total_mot_ticks)
+    frac_care = float(mot_counts.get("Care", 0)) / float(total_mot_ticks)
+    frac_self = float(mot_counts.get("Self", 0)) / float(total_mot_ticks)
+    frac_protect = float(mot_counts.get("Protect", 0)) / float(total_mot_ticks)
+    maternal_fraction = frac_care + frac_protect
+
     return {
         "child_survival": 1.0 if child_alive else 0.0,
         "child_injury": injury,
@@ -366,6 +586,11 @@ def run_episode(seed: int, motivation_genome: dict, cfg: dict) -> dict:
         "child_ttd_norm": float(child_ttd_norm),
         "mother_ttd_norm": float(mother_ttd_norm),
         "mot_counts": mot_counts,
+        "frac_forage": frac_forage,
+        "frac_care": frac_care,
+        "frac_self": frac_self,
+        "frac_protect": frac_protect,
+        "maternal_fraction": maternal_fraction,
         "u_drift_end": float(u_drift_end),
         "mean_overall_deficit_episode": _mean_last(overall_deficit_samples),
         "overall_deficit_end": _last(overall_deficit_samples),
@@ -397,6 +622,12 @@ def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.Ra
     plast_active_f: list[float] = []
     lr_eff_m: list[float] = []
     u_drift_peak: list[float] = []
+    # Behavior fraction samples (per episode), used for emergence metrics
+    frac_for: list[float] = []
+    frac_car: list[float] = []
+    frac_slf: list[float] = []
+    frac_pro: list[float] = []
+    matern: list[float] = []
     for s in seeds:
         r = run_episode(s, motivation_genome, cfg)
         surv.append(r["child_survival"])
@@ -413,6 +644,11 @@ def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.Ra
         plast_active_f.append(float(r.get("plastic_active_frac", float("nan"))))
         lr_eff_m.append(float(r.get("mean_lr_eff_episode", float("nan"))))
         u_drift_peak.append(float(r.get("peak_u_drift_episode", float("nan"))))
+        frac_for.append(float(r.get("frac_forage", float("nan"))))
+        frac_car.append(float(r.get("frac_care", float("nan"))))
+        frac_slf.append(float(r.get("frac_self", float("nan"))))
+        frac_pro.append(float(r.get("frac_protect", float("nan"))))
+        matern.append(float(r.get("maternal_fraction", float("nan"))))
     mean_surv = float(np.mean(surv))
     mean_inj = float(np.mean(inj))
     mean_child_ttd = float(np.mean(child_ttd)) if child_ttd else 0.0
@@ -460,6 +696,13 @@ def evaluate_genome(motivation_genome: dict, seeds: list[int], rng: np.random.Ra
         "std_lr_eff_episode": float(np.nanstd(lr_eff_m, ddof=0)) if lr_eff_m else float("nan"),
         "mean_peak_u_drift_episode": float(np.nanmean(u_drift_peak)) if u_drift_peak else float("nan"),
         "std_peak_u_drift_episode": float(np.nanstd(u_drift_peak, ddof=0)) if u_drift_peak else float("nan"),
+        # Behavior fractions averaged over evaluation seeds (emergence metrics)
+        "frac_forage": float(np.nanmean(frac_for)) if frac_for else float("nan"),
+        "frac_care": float(np.nanmean(frac_car)) if frac_car else float("nan"),
+        "frac_self": float(np.nanmean(frac_slf)) if frac_slf else float("nan"),
+        "frac_protect": float(np.nanmean(frac_pro)) if frac_pro else float("nan"),
+        "maternal_fraction": float(np.nanmean(matern)) if matern else float("nan"),
+        "std_maternal_fraction": float(np.nanstd(matern, ddof=0)) if matern else float("nan"),
     }
 
 
@@ -622,7 +865,73 @@ def _default_cfg() -> dict:
         "fitness_mode": DEFAULT_FITNESS_MODE,
         "alpha_child": DEFAULT_ALPHA_CHILD,
         "output_dir": DEFAULT_OUTPUT_DIR,
+        "init_mode": "baseline_zero",
+        "init_seed": DEFAULT_SEED_MASTER,
+        "init_noise": 0.0,
+        "init_from": None,
+        "init_low": _GENOME_LO,
+        "init_high": _GENOME_HI,
+        "checkpoint_every": 0,
+        "threats_schedule": [],
     }
+
+
+def _git_commit_short() -> str | None:
+    """Best-effort: return short git hash, or None if not available."""
+    try:
+        out = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=_repo_root(),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+        return out or None
+    except (subprocess.CalledProcessError, OSError, FileNotFoundError):
+        return None
+
+
+def _write_run_config(output_dir: str, cfg: dict, init_genome: dict) -> None:
+    """Write run_config.json + init_genome.json + cli_args.txt in the output dir.
+
+    These files together let any future reader reproduce the run exactly:
+      - run_config.json : full cfg, CLI argv, python version, git hash, timestamp
+      - init_genome.json : the gen-0 genome the run started from
+      - cli_args.txt    : the literal command line that launched this run
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    # 1) run_config.json
+    payload = {
+        "timestamp": datetime.now().isoformat(),
+        "python_version": sys.version,
+        "git_commit": _git_commit_short(),
+        "cli_argv": list(sys.argv),
+        "cfg": copy.deepcopy(cfg),
+    }
+    cfg_path = os.path.join(output_dir, "run_config.json")
+    try:
+        with open(cfg_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, default=str)
+        print(f"Wrote {cfg_path}")
+    except OSError as e:
+        print(f"[warn] could not write {cfg_path}: {e}", file=sys.stderr)
+
+    # 2) init_genome.json
+    init_path = os.path.join(output_dir, "init_genome.json")
+    try:
+        with open(init_path, "w", encoding="utf-8") as f:
+            json.dump(init_genome, f, indent=2)
+        print(f"Wrote {init_path}")
+    except OSError as e:
+        print(f"[warn] could not write {init_path}: {e}", file=sys.stderr)
+
+    # 3) cli_args.txt
+    txt_path = os.path.join(output_dir, "cli_args.txt")
+    try:
+        with open(txt_path, "w", encoding="utf-8") as f:
+            f.write(" ".join(sys.argv))
+            f.write("\n")
+    except OSError as e:
+        print(f"[warn] could not write {txt_path}: {e}", file=sys.stderr)
 
 
 def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
@@ -630,7 +939,29 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
     os.makedirs(output_dir, exist_ok=True)
     rng = np.random.RandomState(int(cfg["seed_master"]))
 
-    genome = baseline_zero_motivation_genome()
+    init_mode = str(cfg.get("init_mode", "baseline_zero"))
+    init_seed = int(cfg.get("init_seed", cfg.get("seed_master", DEFAULT_SEED_MASTER)))
+    init_noise = float(cfg.get("init_noise", 0.0) or 0.0)
+    init_from = cfg.get("init_from", None)
+    init_low = float(cfg.get("init_low", _GENOME_LO))
+    init_high = float(cfg.get("init_high", _GENOME_HI))
+
+    genome = initialize_genome(
+        init_mode=init_mode,
+        init_seed=init_seed,
+        init_noise=init_noise,
+        init_from=init_from,
+        init_low=init_low,
+        init_high=init_high,
+    )
+    print(
+        f"[init] mode={init_mode}  init_seed={init_seed}  init_noise={init_noise}"
+        + (f"  init_from={init_from}" if init_from else "")
+    )
+
+    # Save reproducibility artifacts up-front so even an interrupted run is recoverable.
+    _write_run_config(output_dir, cfg, genome)
+
     gen_id = 0
 
     threats_schedule: list[tuple[int, int]] = list(cfg.get("threats_schedule", []) or [])
@@ -657,45 +988,68 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
             f"deficit_scale={_LR_DEFAULT_DEFICIT_SCALE}"
         )
 
+    def _build_row(
+        gen_id_: int,
+        fit_: float,
+        stats_: dict,
+        accepted_: bool,
+        active_threats_: int,
+        evaluated_genome_: dict,
+        mutation_sigma_: float,
+    ) -> dict:
+        """Assemble one CSV row for a generation, incl. behavior fractions and flat genome."""
+        row = {
+            "generation": gen_id_,
+            "fitness": fit_,
+            "accepted": accepted_,
+            "num_threats_active": active_threats_,
+            "mean_child_survival": stats_["mean_child_survival"],
+            "mean_child_ttd_norm": stats_.get("mean_child_ttd_norm", np.nan),
+            "mean_mother_ttd_norm": stats_.get("mean_mother_ttd_norm", np.nan),
+            "mean_child_injury": stats_["mean_child_injury"],
+            "std_child_survival": stats_["std_child_survival"],
+            "mean_u_drift_end": stats_.get("mean_u_drift_end", np.nan),
+            "std_u_drift_end": stats_.get("std_u_drift_end", np.nan),
+            "mean_overall_deficit_episode": stats_.get("mean_overall_deficit_episode", np.nan),
+            "std_overall_deficit_episode": stats_.get("std_overall_deficit_episode", np.nan),
+            "mean_overall_deficit_end": stats_.get("mean_overall_deficit_end", np.nan),
+            "std_overall_deficit_end": stats_.get("std_overall_deficit_end", np.nan),
+            "mean_local_deficit_episode": stats_.get("mean_local_deficit_episode", np.nan),
+            "std_local_deficit_episode": stats_.get("std_local_deficit_episode", np.nan),
+            "mean_local_deficit_end": stats_.get("mean_local_deficit_end", np.nan),
+            "std_local_deficit_end": stats_.get("std_local_deficit_end", np.nan),
+            "mean_du_plastic_episode": stats_.get("mean_du_plastic_episode", np.nan),
+            "std_du_plastic_episode": stats_.get("std_du_plastic_episode", np.nan),
+            "mean_peak_du_plastic_episode": stats_.get("mean_peak_du_plastic_episode", np.nan),
+            "std_peak_du_plastic_episode": stats_.get("std_peak_du_plastic_episode", np.nan),
+            "mean_plastic_active_frac": stats_.get("mean_plastic_active_frac", np.nan),
+            "std_plastic_active_frac": stats_.get("std_plastic_active_frac", np.nan),
+            "mean_lr_eff_episode": stats_.get("mean_lr_eff_episode", np.nan),
+            "std_lr_eff_episode": stats_.get("std_lr_eff_episode", np.nan),
+            "mean_peak_u_drift_episode": stats_.get("mean_peak_u_drift_episode", np.nan),
+            "std_peak_u_drift_episode": stats_.get("std_peak_u_drift_episode", np.nan),
+            # Behavior fractions (emergence metrics)
+            "frac_forage": stats_.get("frac_forage", np.nan),
+            "frac_care": stats_.get("frac_care", np.nan),
+            "frac_self": stats_.get("frac_self", np.nan),
+            "frac_protect": stats_.get("frac_protect", np.nan),
+            "maternal_fraction": stats_.get("maternal_fraction", np.nan),
+            "std_maternal_fraction": stats_.get("std_maternal_fraction", np.nan),
+            "mutation_sigma": float(mutation_sigma_),
+        }
+        # Flat genome columns (u_<motivation>_<input>) for the candidate evaluated this row.
+        row.update(_genome_to_flat_columns(evaluated_genome_))
+        return row
+
     cfg["num_threats"] = _threats_at_gen(gen_id, threats_schedule, base_threats)
     active_threats_now = int(cfg["num_threats"])
     seeds0 = episode_seeds(0, seed_master=int(cfg["seed_master"]), episodes_per_eval=int(cfg["episodes_per_eval"]))
     fit, stats0 = evaluate_genome(genome, seeds0, rng, cfg)
-    rows = [
-        {
-            "generation": gen_id,
-            "fitness": fit,
-            "accepted": True,
-            "num_threats_active": active_threats_now,
-            "mean_child_survival": stats0["mean_child_survival"],
-            "mean_child_ttd_norm": stats0.get("mean_child_ttd_norm", np.nan),
-            "mean_mother_ttd_norm": stats0.get("mean_mother_ttd_norm", np.nan),
-            "mean_child_injury": stats0["mean_child_injury"],
-            "std_child_survival": stats0["std_child_survival"],
-            "mean_u_drift_end": stats0.get("mean_u_drift_end", np.nan),
-            "std_u_drift_end": stats0.get("std_u_drift_end", np.nan),
-            "mean_overall_deficit_episode": stats0.get("mean_overall_deficit_episode", np.nan),
-            "std_overall_deficit_episode": stats0.get("std_overall_deficit_episode", np.nan),
-            "mean_overall_deficit_end": stats0.get("mean_overall_deficit_end", np.nan),
-            "std_overall_deficit_end": stats0.get("std_overall_deficit_end", np.nan),
-            "mean_local_deficit_episode": stats0.get("mean_local_deficit_episode", np.nan),
-            "std_local_deficit_episode": stats0.get("std_local_deficit_episode", np.nan),
-            "mean_local_deficit_end": stats0.get("mean_local_deficit_end", np.nan),
-            "std_local_deficit_end": stats0.get("std_local_deficit_end", np.nan),
-            "mean_du_plastic_episode": stats0.get("mean_du_plastic_episode", np.nan),
-            "std_du_plastic_episode": stats0.get("std_du_plastic_episode", np.nan),
-            "mean_peak_du_plastic_episode": stats0.get("mean_peak_du_plastic_episode", np.nan),
-            "std_peak_du_plastic_episode": stats0.get("std_peak_du_plastic_episode", np.nan),
-            "mean_plastic_active_frac": stats0.get("mean_plastic_active_frac", np.nan),
-            "std_plastic_active_frac": stats0.get("std_plastic_active_frac", np.nan),
-            "mean_lr_eff_episode": stats0.get("mean_lr_eff_episode", np.nan),
-            "std_lr_eff_episode": stats0.get("std_lr_eff_episode", np.nan),
-            "mean_peak_u_drift_episode": stats0.get("mean_peak_u_drift_episode", np.nan),
-            "std_peak_u_drift_episode": stats0.get("std_peak_u_drift_episode", np.nan),
-            "mutation_sigma": 0.0,
-        }
-    ]
-    print(f"[gen {gen_id}] fitness={fit:.4f} mean_surv={stats0['mean_child_survival']:.3f}")
+    rows = [_build_row(gen_id, fit, stats0, True, active_threats_now, genome, 0.0)]
+    print(
+        f"[gen {gen_id}] fitness={fit:.4f} mean_surv={stats0['mean_child_survival']:.3f} "
+        f"maternal={stats0.get('maternal_fraction', float('nan')):.3f}"
+    )
 
     best_genome = copy.deepcopy(genome)
     best_fit = fit
@@ -747,7 +1101,9 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
             best_genome = candidate
             best_gen = gen_id
             print(
-                f"[gen {gen_id}] ACCEPT fitness={fit_c:.4f} mean_surv={stats_c['mean_child_survival']:.3f}"
+                f"[gen {gen_id}] ACCEPT fitness={fit_c:.4f} "
+                f"mean_surv={stats_c['mean_child_survival']:.3f} "
+                f"maternal={stats_c.get('maternal_fraction', float('nan')):.3f}"
             )
         else:
             print(
@@ -755,38 +1111,15 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
             )
 
         rows.append(
-            {
-                "generation": gen_id,
-                "fitness": fit_c,
-                "accepted": accepted,
-                "num_threats_active": active_threats_now,
-                "mean_child_survival": stats_c["mean_child_survival"],
-                "mean_child_ttd_norm": stats_c.get("mean_child_ttd_norm", np.nan),
-                "mean_mother_ttd_norm": stats_c.get("mean_mother_ttd_norm", np.nan),
-                "mean_child_injury": stats_c["mean_child_injury"],
-                "std_child_survival": stats_c["std_child_survival"],
-                "mean_u_drift_end": stats_c.get("mean_u_drift_end", np.nan),
-                "std_u_drift_end": stats_c.get("std_u_drift_end", np.nan),
-                "mean_overall_deficit_episode": stats_c.get("mean_overall_deficit_episode", np.nan),
-                "std_overall_deficit_episode": stats_c.get("std_overall_deficit_episode", np.nan),
-                "mean_overall_deficit_end": stats_c.get("mean_overall_deficit_end", np.nan),
-                "std_overall_deficit_end": stats_c.get("std_overall_deficit_end", np.nan),
-                "mean_local_deficit_episode": stats_c.get("mean_local_deficit_episode", np.nan),
-                "std_local_deficit_episode": stats_c.get("std_local_deficit_episode", np.nan),
-                "mean_local_deficit_end": stats_c.get("mean_local_deficit_end", np.nan),
-                "std_local_deficit_end": stats_c.get("std_local_deficit_end", np.nan),
-                "mean_du_plastic_episode": stats_c.get("mean_du_plastic_episode", np.nan),
-                "std_du_plastic_episode": stats_c.get("std_du_plastic_episode", np.nan),
-                "mean_peak_du_plastic_episode": stats_c.get("mean_peak_du_plastic_episode", np.nan),
-                "std_peak_du_plastic_episode": stats_c.get("std_peak_du_plastic_episode", np.nan),
-                "mean_plastic_active_frac": stats_c.get("mean_plastic_active_frac", np.nan),
-                "std_plastic_active_frac": stats_c.get("std_plastic_active_frac", np.nan),
-                "mean_lr_eff_episode": stats_c.get("mean_lr_eff_episode", np.nan),
-                "std_lr_eff_episode": stats_c.get("std_lr_eff_episode", np.nan),
-                "mean_peak_u_drift_episode": stats_c.get("mean_peak_u_drift_episode", np.nan),
-                "std_peak_u_drift_episode": stats_c.get("std_peak_u_drift_episode", np.nan),
-                "mutation_sigma": float(cfg["mutation_sigma"]),
-            }
+            _build_row(
+                gen_id_=gen_id,
+                fit_=fit_c,
+                stats_=stats_c,
+                accepted_=accepted,
+                active_threats_=active_threats_now,
+                evaluated_genome_=candidate,
+                mutation_sigma_=float(cfg["mutation_sigma"]),
+            )
         )
 
         if watch_every > 0 and gen_id % watch_every == 0:
@@ -865,6 +1198,12 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
     has_mttd, mttd = _col("mean_mother_ttd_norm")
     has_ud, udrift = _col("mean_u_drift_end")
     has_ud_std, udrift_std = _col("std_u_drift_end")
+    has_mat, matf = _col("maternal_fraction")
+    has_ff, fff = _col("frac_forage")
+    has_fc, fcc = _col("frac_care")
+    has_fs, fss = _col("frac_self")
+    has_fp, fpp = _col("frac_protect")
+    has_behavior = has_mat or (has_ff and has_fc and has_fs and has_fp)
 
     best_so_far = []
     b = -1e9
@@ -872,8 +1211,13 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
         b = max(b, f)
         best_so_far.append(b)
 
-    # 3 panels when TTD available; otherwise fall back to 2 panels.
-    n_panels = 3 if (has_cttd or has_mttd) else 2
+    # 4 panels when behavior fractions are present, else 3 with TTD, else 2.
+    if has_behavior:
+        n_panels = 4
+    elif has_cttd or has_mttd:
+        n_panels = 3
+    else:
+        n_panels = 2
     fig, axes = plt.subplots(n_panels, 1, figsize=(9, 3.2 * n_panels), sharex=True)
     if n_panels == 1:
         axes = [axes]
@@ -914,22 +1258,46 @@ def _plot_lineage(rows: list[dict], output_dir: str) -> None:
         if has_surv and n_panels >= 3:
             ax2 = axes[2]
             ax2.plot(gens, [float(x) for x in surv], "^-", color="coral", alpha=0.85, markersize=4, label="mean child survival (binary)")
-            ax2.set_xlabel("Generation")
             ax2.set_ylabel("Mean survival")
             ax2.set_ylim(-0.05, 1.05)
             ax2.legend(loc="lower right", fontsize=8)
             ax2.grid(True, alpha=0.3)
+            if n_panels < 4:
+                ax2.set_xlabel("Generation")
         else:
             ax1.set_xlabel("Generation")
     else:
         # Legacy binary survival panel
         if has_surv:
             ax1.plot(gens, [float(x) for x in surv], "s-", color="coral", alpha=0.85, markersize=4, label="mean child survival (eval batch)")
-        ax1.set_xlabel("Generation")
         ax1.set_ylabel("Mean child survival")
         ax1.set_ylim(-0.05, 1.05)
         ax1.legend(loc="lower right", fontsize=8)
         ax1.grid(True, alpha=0.3)
+        if n_panels < 4:
+            ax1.set_xlabel("Generation")
+
+    if has_behavior and n_panels >= 4:
+        ax3 = axes[3]
+        if has_ff:
+            ax3.plot(gens, [float(x) for x in fff], color="tab:olive", alpha=0.8, linewidth=1.2, label="frac Forage")
+        if has_fc:
+            ax3.plot(gens, [float(x) for x in fcc], color="tab:green", alpha=0.85, linewidth=1.4, label="frac Care")
+        if has_fs:
+            ax3.plot(gens, [float(x) for x in fss], color="tab:gray", alpha=0.8, linewidth=1.2, label="frac Self")
+        if has_fp:
+            ax3.plot(gens, [float(x) for x in fpp], color="tab:red", alpha=0.85, linewidth=1.4, label="frac Protect")
+        if has_mat:
+            ax3.plot(
+                gens, [float(x) for x in matf],
+                color="black", alpha=0.95, linewidth=1.8, linestyle="--",
+                label="maternal fraction (Care+Protect)",
+            )
+        ax3.set_xlabel("Generation")
+        ax3.set_ylabel("Behavior fraction (per alive tick)")
+        ax3.set_ylim(-0.02, 1.02)
+        ax3.legend(loc="upper right", fontsize=7, ncol=2)
+        ax3.grid(True, alpha=0.3)
 
     fig.tight_layout()
     out_png = os.path.join(output_dir, "lineage_plot.png")
@@ -1032,7 +1400,7 @@ def _parse_args():
         "--alpha-child",
         type=float,
         default=DEFAULT_ALPHA_CHILD,
-        help="Weight on child in ttd_overall fitness (0..1). Example 0.7 = 70% child, 30% mother.",
+        help="Weight on child in ttd_overall fitness (0..1). Example 0.7 = 70%% child, 30%% mother.",
     )
     p.add_argument(
         "--checkpoint-every",
@@ -1143,6 +1511,61 @@ def _parse_args():
             "E.g. --lr-scale 0.1 makes all learning rates 10x smaller; 0.01 = 100x smaller."
         ),
     )
+    p.add_argument(
+        "--init-mode",
+        choices=["baseline_zero", "random_uniform", "anti_maternal", "pro_maternal", "from_json"],
+        default="baseline_zero",
+        help=(
+            "Initial motivation-weight genome: "
+            "baseline_zero (all 0.5; legacy default), "
+            "random_uniform (U(init_low,init_high) per weight; uses --init-seed), "
+            "anti_maternal (low Care/Protect, high Self -- de novo emergence test), "
+            "pro_maternal (high Care/Protect; control), "
+            "from_json (load --init-from PATH)."
+        ),
+    )
+    p.add_argument(
+        "--init-seed",
+        type=int,
+        default=None,
+        metavar="INT",
+        help=(
+            "RNG seed used only by random_uniform and the init_noise jitter on templates. "
+            "Defaults to --seed-master if omitted, so init varies with the master seed."
+        ),
+    )
+    p.add_argument(
+        "--init-noise",
+        type=float,
+        default=0.0,
+        metavar="SIGMA",
+        help=(
+            "Gaussian sigma added to every weight after the initialization template is "
+            "chosen (no-op for random_uniform). Useful to add per-replicate jitter to "
+            "anti_maternal / pro_maternal / baseline_zero / from_json starts."
+        ),
+    )
+    p.add_argument(
+        "--init-from",
+        type=str,
+        default=None,
+        metavar="PATH",
+        help="Path to JSON genome file (used iff --init-mode from_json).",
+    )
+    p.add_argument(
+        "--init-low",
+        type=float,
+        default=_GENOME_LO,
+        metavar="FLOAT",
+        help=f"Lower bound for random_uniform init (default {_GENOME_LO}).",
+    )
+    p.add_argument(
+        "--init-high",
+        type=float,
+        default=_GENOME_HI,
+        metavar="FLOAT",
+        help=f"Upper bound for random_uniform init (default {_GENOME_HI}).",
+    )
     args = p.parse_args()
     if args.watch_every < 0:
         p.error("--watch-every must be >= 0")
@@ -1189,6 +1612,12 @@ if __name__ == "__main__":
                 "lr_max": (None if args.lr_max is None else float(args.lr_max)),
                 "lr_deficit_scale": (None if args.lr_deficit_scale is None else float(args.lr_deficit_scale)),
                 "lr_scale": (None if args.lr_scale is None else float(args.lr_scale)),
+                "init_mode": str(args.init_mode),
+                "init_seed": int(args.init_seed) if args.init_seed is not None else int(args.seed_master),
+                "init_noise": float(args.init_noise),
+                "init_from": args.init_from,
+                "init_low": float(args.init_low),
+                "init_high": float(args.init_high),
             }
         )
         main(cfg, open_viz_after=args.viz, watch_every=args.watch_every)
