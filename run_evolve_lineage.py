@@ -20,6 +20,14 @@ Reproducibility:
 - The full run is captured in run_config.json (CLI, cfg, python, git hash) and init_genome.json.
 - --checkpoint-every N saves best-genome snapshots to checkpoints/ for later non-learner tests.
 
+Crash safety / resume:
+- lineage_generations.csv is written incrementally (one row per generation, fsync'd).
+- After every generation latest_state.json is overwritten atomically with the
+  best genome, best fitness, current generation index, and the numpy RNG state.
+- Re-run with --resume (and the same --output-dir) to continue an interrupted
+  run byte-identically from the last completed generation. If --resume is set
+  but no latest_state.json exists, the run starts fresh with a warning.
+
 Logging (per generation, to lineage_generations.csv):
 - Fitness, child/mother TTD, child survival, child injury
 - Plasticity diagnostics (u_drift, du_plastic, lr_eff, plastic_active_frac, peak_u_drift)
@@ -43,6 +51,7 @@ Outputs (in --output-dir):
   final_genome.json           (best genome found; for Pygame: --genome)
   final_genome.txt            (human-readable summary)
   run_config.json             (CLI args, cfg, python version, best-effort git hash)
+  latest_state.json           (resume state: best_genome + RNG, refreshed every generation)
   checkpoints/best_genXXXX.json   (if --checkpoint-every > 0)
 
 Pygame after a run:
@@ -872,6 +881,7 @@ def _default_cfg() -> dict:
         "init_low": _GENOME_LO,
         "init_high": _GENOME_HI,
         "checkpoint_every": 0,
+        "resume": False,
         "threats_schedule": [],
     }
 
@@ -934,35 +944,140 @@ def _write_run_config(output_dir: str, cfg: dict, init_genome: dict) -> None:
         print(f"[warn] could not write {txt_path}: {e}", file=sys.stderr)
 
 
+# --------------------------------------------------------------------------
+# Crash-safe persistence helpers (incremental CSV + resumable state).
+#
+# After every generation we (a) append one row to lineage_generations.csv and
+# (b) overwrite latest_state.json atomically.  If power dies, latest_state.json
+# is the source of truth: it tells us the last fully-completed generation, the
+# current best genome, and the RNG state needed to reproduce future mutations
+# exactly.  --resume reads it back and continues from gen+1.
+# --------------------------------------------------------------------------
+
+
+def _serialize_rng_state(rng: np.random.RandomState) -> dict:
+    """Serialize a legacy MT19937 RandomState to a JSON-friendly dict."""
+    name, arr, pos, has_gauss, cached_gauss = rng.get_state()
+    return {
+        "name": str(name),
+        "arr": np.asarray(arr, dtype=np.uint32).tolist(),
+        "pos": int(pos),
+        "has_gauss": int(has_gauss),
+        "cached_gauss": float(cached_gauss),
+    }
+
+
+def _deserialize_rng_state(d: dict) -> tuple:
+    return (
+        str(d["name"]),
+        np.array(d["arr"], dtype=np.uint32),
+        int(d["pos"]),
+        int(d["has_gauss"]),
+        float(d["cached_gauss"]),
+    )
+
+
+def _atomic_write_json(path: str, payload: dict) -> None:
+    """Write JSON atomically (write to .tmp, fsync, os.replace)."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(payload, f, default=str)
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except OSError:
+            pass
+    os.replace(tmp, path)
+
+
+def _save_latest_state(
+    output_dir: str,
+    *,
+    last_completed_gen: int,
+    best_gen: int,
+    best_fit: float,
+    best_genome: dict,
+    rng: np.random.RandomState,
+    cfg: dict,
+) -> None:
+    """Atomically persist enough state to resume the run byte-identically."""
+    payload = {
+        "last_completed_gen": int(last_completed_gen),
+        "best_gen": int(best_gen),
+        "best_fit": float(best_fit),
+        "best_genome": best_genome,
+        "rng_state": _serialize_rng_state(rng),
+        "current_num_threats": int(cfg.get("num_threats", 0)),
+        "timestamp": datetime.now().isoformat(),
+    }
+    _atomic_write_json(os.path.join(output_dir, "latest_state.json"), payload)
+
+
+def _load_latest_state(output_dir: str) -> dict | None:
+    """Load latest_state.json, or return None if it's missing.
+
+    Raises RuntimeError if the file exists but is corrupt - we never want to
+    silently clobber an interrupted run's CSV/state, the user should
+    investigate and either delete latest_state.json or fix it manually.
+    """
+    p = os.path.join(output_dir, "latest_state.json")
+    if not os.path.exists(p):
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        raise RuntimeError(
+            f"latest_state.json exists at {p} but could not be parsed: {e}. "
+            f"Refusing to clobber the run; delete the file by hand if you want "
+            f"to start fresh."
+        ) from e
+
+
+def _csv_init(csv_path: str, fieldnames: list[str]) -> None:
+    """(Re)create CSV with a header row only."""
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writeheader()
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except OSError:
+            pass
+
+
+def _csv_append(csv_path: str, fieldnames: list[str], row: dict) -> None:
+    """Append a single row and flush+fsync so a kill/power-loss won't lose it."""
+    with open(csv_path, "a", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        w.writerow(row)
+        f.flush()
+        try:
+            os.fsync(f.fileno())
+        except OSError:
+            pass
+
+
+def _read_existing_rows(csv_path: str) -> list[dict]:
+    """Read previously-written CSV rows back as plain dicts (string values).
+
+    Light type-coercion is done where downstream code expects native types
+    (e.g. ``accepted`` must be a real bool because ``bool('False') == True``).
+    """
+    if not os.path.exists(csv_path):
+        return []
+    with open(csv_path, encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    for r in rows:
+        v = r.get("accepted")
+        if isinstance(v, str):
+            r["accepted"] = v.strip().lower() in ("true", "1", "yes")
+    return rows
+
+
 def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
     output_dir = str(cfg["output_dir"])
     os.makedirs(output_dir, exist_ok=True)
-    rng = np.random.RandomState(int(cfg["seed_master"]))
-
-    init_mode = str(cfg.get("init_mode", "baseline_zero"))
-    init_seed = int(cfg.get("init_seed", cfg.get("seed_master", DEFAULT_SEED_MASTER)))
-    init_noise = float(cfg.get("init_noise", 0.0) or 0.0)
-    init_from = cfg.get("init_from", None)
-    init_low = float(cfg.get("init_low", _GENOME_LO))
-    init_high = float(cfg.get("init_high", _GENOME_HI))
-
-    genome = initialize_genome(
-        init_mode=init_mode,
-        init_seed=init_seed,
-        init_noise=init_noise,
-        init_from=init_from,
-        init_low=init_low,
-        init_high=init_high,
-    )
-    print(
-        f"[init] mode={init_mode}  init_seed={init_seed}  init_noise={init_noise}"
-        + (f"  init_from={init_from}" if init_from else "")
-    )
-
-    # Save reproducibility artifacts up-front so even an interrupted run is recoverable.
-    _write_run_config(output_dir, cfg, genome)
-
-    gen_id = 0
 
     threats_schedule: list[tuple[int, int]] = list(cfg.get("threats_schedule", []) or [])
     base_threats = int(cfg.get("num_threats", DEFAULT_NUM_THREATS))
@@ -1041,20 +1156,6 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
         row.update(_genome_to_flat_columns(evaluated_genome_))
         return row
 
-    cfg["num_threats"] = _threats_at_gen(gen_id, threats_schedule, base_threats)
-    active_threats_now = int(cfg["num_threats"])
-    seeds0 = episode_seeds(0, seed_master=int(cfg["seed_master"]), episodes_per_eval=int(cfg["episodes_per_eval"]))
-    fit, stats0 = evaluate_genome(genome, seeds0, rng, cfg)
-    rows = [_build_row(gen_id, fit, stats0, True, active_threats_now, genome, 0.0)]
-    print(
-        f"[gen {gen_id}] fitness={fit:.4f} mean_surv={stats0['mean_child_survival']:.3f} "
-        f"maternal={stats0.get('maternal_fraction', float('nan')):.3f}"
-    )
-
-    best_genome = copy.deepcopy(genome)
-    best_fit = fit
-    best_gen = 0
-
     def _write_checkpoint(gen_id_: int, best_fit_: float, best_genome_: dict) -> None:
         ck_dir = os.path.join(output_dir, "checkpoints")
         os.makedirs(ck_dir, exist_ok=True)
@@ -1073,19 +1174,135 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
             f.write(repr(best_genome_))
             f.write("\n")
 
-    if watch_every > 0 and gen_id % watch_every == 0:
-        ep = build_watch_episode_payload(seeds0[0], best_genome, cfg)
-        ep_path = _write_watch_episode_file(ep, output_dir)
-        launch_pygame_episode(
-            ep_path,
-            title=f"Evolve watch — generation {gen_id} (close window to continue)",
+    csv_path = os.path.join(output_dir, "lineage_generations.csv")
+    checkpoint_every = int(cfg.get("checkpoint_every", 0) or 0)
+
+    # ----------------------------------------------------------------
+    # Resume vs fresh-start branching.
+    # ----------------------------------------------------------------
+    resume_requested = bool(cfg.get("resume", False))
+    state = _load_latest_state(output_dir) if resume_requested else None
+
+    if state is not None:
+        # ------------------- RESUME branch -------------------
+        rng = np.random.RandomState(0)
+        rng.set_state(_deserialize_rng_state(state["rng_state"]))
+
+        best_genome = copy.deepcopy(state["best_genome"])
+        best_fit = float(state["best_fit"])
+        best_gen = int(state["best_gen"])
+        last_completed_gen = int(state["last_completed_gen"])
+
+        print(
+            f"[resume] loaded latest_state.json from {output_dir}\n"
+            f"[resume] last_completed_gen={last_completed_gen}  "
+            f"best_fit={best_fit:.4f} (gen {best_gen})"
         )
 
-    checkpoint_every = int(cfg.get("checkpoint_every", 0) or 0)
-    if checkpoint_every > 0 and gen_id % checkpoint_every == 0:
-        _write_checkpoint(gen_id, best_fit, best_genome)
+        rows = _read_existing_rows(csv_path)
+        if not rows:
+            raise RuntimeError(
+                f"latest_state.json says gen {last_completed_gen} but "
+                f"{csv_path} is missing/empty. Aborting."
+            )
+        fieldnames = list(rows[0].keys())
+        # If a power loss happened between csv-flush and state-flush we may
+        # have one extra row in the CSV.  Trim back so the two agree.
+        if len(rows) > last_completed_gen + 1:
+            print(
+                f"[resume] CSV has {len(rows)} rows but state says "
+                f"{last_completed_gen + 1}; trimming."
+            )
+            rows = rows[: last_completed_gen + 1]
+            _csv_init(csv_path, fieldnames)
+            for r in rows:
+                _csv_append(csv_path, fieldnames, r)
 
-    for gen_id in range(1, int(cfg["num_generations"]) + 1):
+        cfg["num_threats"] = _threats_at_gen(last_completed_gen, threats_schedule, base_threats)
+        start_gen = last_completed_gen + 1
+        gen_id = last_completed_gen
+        if start_gen > int(cfg["num_generations"]):
+            print(
+                f"[resume] target generations={cfg['num_generations']} already "
+                f"reached; finalising without further evolution."
+            )
+
+    else:
+        # ------------------- FRESH-START branch -------------------
+        if resume_requested:
+            print(
+                "[resume] --resume set but no latest_state.json found; starting fresh.",
+                file=sys.stderr,
+            )
+
+        rng = np.random.RandomState(int(cfg["seed_master"]))
+
+        init_mode = str(cfg.get("init_mode", "baseline_zero"))
+        init_seed = int(cfg.get("init_seed", cfg.get("seed_master", DEFAULT_SEED_MASTER)))
+        init_noise = float(cfg.get("init_noise", 0.0) or 0.0)
+        init_from = cfg.get("init_from", None)
+        init_low = float(cfg.get("init_low", _GENOME_LO))
+        init_high = float(cfg.get("init_high", _GENOME_HI))
+
+        genome = initialize_genome(
+            init_mode=init_mode,
+            init_seed=init_seed,
+            init_noise=init_noise,
+            init_from=init_from,
+            init_low=init_low,
+            init_high=init_high,
+        )
+        print(
+            f"[init] mode={init_mode}  init_seed={init_seed}  init_noise={init_noise}"
+            + (f"  init_from={init_from}" if init_from else "")
+        )
+
+        # Reproducibility artifacts (only on fresh start - preserved on resume).
+        _write_run_config(output_dir, cfg, genome)
+
+        gen_id = 0
+        cfg["num_threats"] = _threats_at_gen(gen_id, threats_schedule, base_threats)
+        active_threats_now = int(cfg["num_threats"])
+        seeds0 = episode_seeds(0, seed_master=int(cfg["seed_master"]), episodes_per_eval=int(cfg["episodes_per_eval"]))
+        fit, stats0 = evaluate_genome(genome, seeds0, rng, cfg)
+        rows = [_build_row(gen_id, fit, stats0, True, active_threats_now, genome, 0.0)]
+        print(
+            f"[gen {gen_id}] fitness={fit:.4f} mean_surv={stats0['mean_child_survival']:.3f} "
+            f"maternal={stats0.get('maternal_fraction', float('nan')):.3f}"
+        )
+
+        best_genome = copy.deepcopy(genome)
+        best_fit = fit
+        best_gen = 0
+
+        # Initial CSV header + gen-0 row + initial state, all flushed to disk.
+        fieldnames = list(rows[0].keys())
+        _csv_init(csv_path, fieldnames)
+        _csv_append(csv_path, fieldnames, rows[0])
+        _save_latest_state(
+            output_dir,
+            last_completed_gen=0,
+            best_gen=0,
+            best_fit=best_fit,
+            best_genome=best_genome,
+            rng=rng,
+            cfg=cfg,
+        )
+
+        if watch_every > 0 and gen_id % watch_every == 0:
+            ep = build_watch_episode_payload(seeds0[0], best_genome, cfg)
+            ep_path = _write_watch_episode_file(ep, output_dir)
+            launch_pygame_episode(
+                ep_path,
+                title=f"Evolve watch — generation {gen_id} (close window to continue)",
+            )
+
+        if checkpoint_every > 0 and gen_id % checkpoint_every == 0:
+            _write_checkpoint(gen_id, best_fit, best_genome)
+
+        start_gen = 1
+
+    for gen_id in range(start_gen, int(cfg["num_generations"]) + 1):
         new_threats = _threats_at_gen(gen_id, threats_schedule, base_threats)
         if new_threats != int(cfg["num_threats"]):
             print(f"[gen {gen_id}] threats: {int(cfg['num_threats'])} -> {new_threats}")
@@ -1110,16 +1327,29 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
                 f"[gen {gen_id}] reject fitness={fit_c:.4f} (best={best_fit:.4f})"
             )
 
-        rows.append(
-            _build_row(
-                gen_id_=gen_id,
-                fit_=fit_c,
-                stats_=stats_c,
-                accepted_=accepted,
-                active_threats_=active_threats_now,
-                evaluated_genome_=candidate,
-                mutation_sigma_=float(cfg["mutation_sigma"]),
-            )
+        new_row = _build_row(
+            gen_id_=gen_id,
+            fit_=fit_c,
+            stats_=stats_c,
+            accepted_=accepted,
+            active_threats_=active_threats_now,
+            evaluated_genome_=candidate,
+            mutation_sigma_=float(cfg["mutation_sigma"]),
+        )
+        rows.append(new_row)
+
+        # Persist this generation atomically: append CSV row first, then
+        # overwrite latest_state.json. On power loss between the two writes
+        # the resume logic detects the extra CSV row and trims it back.
+        _csv_append(csv_path, fieldnames, new_row)
+        _save_latest_state(
+            output_dir,
+            last_completed_gen=gen_id,
+            best_gen=best_gen,
+            best_fit=best_fit,
+            best_genome=best_genome,
+            rng=rng,
+            cfg=cfg,
         )
 
         if watch_every > 0 and gen_id % watch_every == 0:
@@ -1133,12 +1363,7 @@ def main(cfg: dict, open_viz_after: bool = False, watch_every: int = 0):
         if checkpoint_every > 0 and gen_id % checkpoint_every == 0:
             _write_checkpoint(gen_id, best_fit, best_genome)
 
-    csv_path = os.path.join(output_dir, "lineage_generations.csv")
-    with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        w.writeheader()
-        w.writerows(rows)
-
+    # CSV was written incrementally (one row per generation, flushed to disk).
     # Save final genome as text summary
     summary_path = os.path.join(output_dir, "final_genome.txt")
     with open(summary_path, "w", encoding="utf-8") as f:
@@ -1409,6 +1634,16 @@ def _parse_args():
         metavar="N",
         help="Write best-genome checkpoints every N generations into output_dir/checkpoints/. 0 = off.",
     )
+    p.add_argument(
+        "--resume",
+        action="store_true",
+        help=(
+            "Resume an interrupted run from output_dir/latest_state.json. "
+            "Restores best_genome, best_fit, RNG state, and the in-memory CSV "
+            "rows; the loop continues from the last completed generation+1. "
+            "Other CLI flags should match the original run (use cli_args.txt)."
+        ),
+    )
     p.add_argument("--output-dir", type=str, default=DEFAULT_OUTPUT_DIR, help="Output directory under test_results/.")
     p.add_argument(
         "--viz",
@@ -1602,6 +1837,7 @@ if __name__ == "__main__":
                 "fitness_mode": str(args.fitness_mode),
                 "alpha_child": float(args.alpha_child),
                 "checkpoint_every": int(args.checkpoint_every),
+                "resume": bool(args.resume),
                 "plasticity_rule": rule,
                 "plasticity_deficit_signal": str(args.deficit_signal),
                 "plasticity_learn_w": args.learn_w == "on",

@@ -362,18 +362,27 @@ total wall-clock per batch.
 
 ## Monitoring progress
 
+The CSV is written incrementally (one row appended per generation, fsync'd), so all of
+these work in real time on a live run:
+
 ```bash
-# Row count = current generation
+# Row count = current generation + 1 (gen 0 included)
 wc -l Emergence_results/normal/P1_anti_maternal_seed42/lineage_generations.csv
 
 # Latest 3 rows (generation, fitness, accepted):
 tail -3 Emergence_results/normal/P1_anti_maternal_seed42/lineage_generations.csv | cut -d, -f1,2,3
 
+# Same info via latest_state.json (cleaner if you only want the gen number):
+python -c "import json; d=json.load(open('Emergence_results/normal/P1_anti_maternal_seed42/latest_state.json')); print('gen', d['last_completed_gen'], 'best_fit', d['best_fit'])"
+
+# Status across every run in your trees (COMPLETE / PARTIAL / EMPTY):
+python check_runs.py Emergence_results Sweep_E2_results Sweep_P1_results Sweep_P2_results
+
 # Quick check: how many runs in a batch have produced a final genome yet?
 ls Emergence_results/normal/*/final_genome.json 2>/dev/null | wc -l
 
 # Disk usage so far:
-du -sh Emergence_results Sweep_results 2>/dev/null
+du -sh Emergence_results Sweep_*_results 2>/dev/null
 ```
 
 ---
@@ -511,6 +520,7 @@ Each run writes the following to its `--output-dir`, so any run can be replayed 
 - `cli_args.txt` — the literal command line that launched the run
 - `init_genome.json` — the gen-0 genome (after `--init-noise` is applied)
 - `final_genome.json` — best genome at the end of evolution
+- `latest_state.json` — resume state (best genome + numpy RNG state), refreshed every generation
 - `checkpoints/best_gen{N:04d}.json` — best-so-far genomes at intervals (Batches 1–3 only,
   via `--checkpoint-every 500`)
 
@@ -523,12 +533,128 @@ $(cat <output_dir>/cli_args.txt)
 
 ---
 
+## Power loss / crash recovery
+
+The runner is designed to survive a hard kill or power loss. Two things make this work:
+
+1. **`lineage_generations.csv` is written incrementally.** Every generation appends one row
+   and `fsync`s it. So if power dies you can immediately see exactly which generation was
+   the last to fully complete by counting CSV rows.
+2. **`latest_state.json` is overwritten atomically every generation.** It contains the
+   current best genome, best fitness, last completed generation, and the numpy RNG state.
+   That is enough to resume the lineage **byte-identically** (same mutations, same fitness
+   trajectory) from the last completed generation.
+
+### Step 1 — see what survived
+
+After a crash, run `check_runs.py` to classify everything in your output trees:
+
+```bash
+python check_runs.py Emergence_results Sweep_E2_results Sweep_P1_results Sweep_P2_results
+```
+
+Output looks like:
+
+```
+STATUS        CSV  TARGET  LAST  PATH
+PARTIAL      1234    3001  1233  Emergence_results/normal/E3a_..._seed7
+COMPLETE     3001    3001    -   Emergence_results/normal/E3a_..._seed8
+EMPTY           -       -    -   Emergence_results/hard/...
+```
+
+- **COMPLETE** — `final_genome.json` exists. Nothing to do.
+- **PARTIAL** — interrupted. CSV rows = `LAST + 1`. Resumable.
+- **EMPTY** — directory was created but the run never wrote any data (re-launch from scratch).
+
+### Step 2 — get ready-to-paste resume commands
+
+Add `--show-resume-cmd`. For every PARTIAL run, the script reads the original `cli_args.txt`
+and prints the exact command needed to resume — just append `--resume`:
+
+```bash
+python check_runs.py Emergence_results --only PARTIAL --show-resume-cmd
+```
+
+Sample output:
+
+```
+PARTIAL      1234    3001  1233  Emergence_results/normal/E3a_..._seed7
+PARTIAL       870    3001   869  Emergence_results/normal/E3a_..._seed11
+
+# Resume commands (paste into the same kind of shell that started the run):
+python run_evolve_lineage.py --generations 3000 --episodes 8 ... --resume
+python run_evolve_lineage.py --generations 3000 --episodes 8 ... --resume
+```
+
+You can pipe straight to a script:
+
+```bash
+python check_runs.py Emergence_results Sweep_E2_results Sweep_P1_results Sweep_P2_results \
+    --only PARTIAL --show-resume-cmd \
+  | grep -E '^python' \
+  > resume_commands.sh
+chmod +x resume_commands.sh
+```
+
+Then dispatch them across your 12 terminals (one batch per terminal as before).
+
+### Step 3 — what `--resume` actually does
+
+When `run_evolve_lineage.py --resume` is invoked on an output dir with a `latest_state.json`:
+
+1. It loads the saved RNG state, best genome, best fitness, and last completed generation.
+2. It re-reads the existing CSV. If there is a stale extra row from an interrupted
+   csv-flush (the one race window where the CSV was flushed but the state file was not),
+   it trims the CSV back to match the state and continues.
+3. It does **not** rewrite `run_config.json`, `init_genome.json`, or `cli_args.txt` — those
+   still describe the original launch.
+4. It picks up the for-loop at `last_completed_gen + 1` and runs to whatever
+   `--generations` you pass on the resume command line.
+5. The resumed CSV is byte-identical to a hypothetical no-failure run with the same args
+   (verified in the smoke-test: SHA256 match for both `lineage_generations.csv` and
+   `final_genome.json`).
+
+If `--resume` is set but `latest_state.json` is missing, the run **starts fresh** with a
+warning. If the file exists but is corrupt, the run **aborts** so you don't accidentally
+clobber data — delete the file by hand if you really do want to start over.
+
+### Step 4 — extending an already-completed run
+
+You can also point `--resume` at a finished run and bump `--generations`:
+
+```bash
+# Was 3000 generations - extend to 5000:
+python run_evolve_lineage.py --generations 5000 ... --output-dir <dir> --resume
+```
+
+The runner detects that the saved `last_completed_gen` already exceeds the *old* target
+and just continues from there.
+
+### Step 5 — restarting your tmux/parallel batches
+
+If you used `tmux` (recommended on remote machines), the panes are gone after a power loss
+but the run state on disk survives. After reboot:
+
+```bash
+cd <repo_root>
+tmux new -s evolve
+
+# Inside tmux, in 12 panes, paste one of these per pane:
+bash resume_commands_batch_1.sh   # etc, however you split them
+```
+
+If a particular run's `--output-dir` is **MISSING** entirely (e.g. corrupted disk), just
+re-launch it from scratch with the original command (no `--resume`).
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `--init-mode from_json requires --init-from PATH` | typo in the command | check the path exists |
-| `lineage_generations.csv` missing the final row | run was killed mid-generation | re-launch only that command |
+| `lineage_generations.csv` missing rows after a crash | run was killed mid-generation | `python check_runs.py --only PARTIAL --show-resume-cmd <root>` then run with `--resume` |
+| `latest_state.json exists but could not be parsed` | the file was edited / corrupted | delete that file and re-launch the original command (loses progress) |
 | Two runs writing to the same directory | wrong `--output-dir` template | check `tag` variable in the loop |
 | "Permission denied" creating directory | running outside repo / wrong cwd | `cd` to repo root first |
 | `python3: command not found` | use `python` instead | adjust the loops |
