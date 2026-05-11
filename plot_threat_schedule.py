@@ -149,6 +149,14 @@ def _detect_plasticity_and_world(csv_path: str) -> tuple[str | None, str | None]
             plasticity = PLASTIC_TAG[p]
         if p in WORLD_TAG and world is None:
             world = p
+    if plasticity is None:
+        run_dir = os.path.basename(os.path.dirname(csv_path))
+        if run_dir.startswith("E2_"):
+            plasticity = "E2"
+        elif run_dir.startswith("P1_"):
+            plasticity = "P1"
+        elif run_dir.startswith("P2_"):
+            plasticity = "P2"
     return plasticity, world
 
 

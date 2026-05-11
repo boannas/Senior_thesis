@@ -101,6 +101,14 @@ def _detect_plasticity_and_world(csv_path: str, root: str) -> tuple[str | None, 
             plasticity = PLASTIC_TAG[p]
         if p in WORLD_TAG and world is None:
             world = p
+    if plasticity is None:
+        run_dir = os.path.basename(os.path.dirname(csv_path))
+        if run_dir.startswith("E2_"):
+            plasticity = "E2"
+        elif run_dir.startswith("P1_"):
+            plasticity = "P1"
+        elif run_dir.startswith("P2_"):
+            plasticity = "P2"
     return plasticity, world
 
 
@@ -118,6 +126,32 @@ def _stack_traces(traces: list[np.ndarray]) -> np.ndarray:
     out = np.full((len(traces), max_len), np.nan, dtype=float)
     for i, t in enumerate(traces):
         out[i, : len(t)] = t
+    return out
+
+
+def _bootstrap_delta_traces(
+    traces_a: list[np.ndarray],
+    traces_b: list[np.ndarray],
+    n_boot: int,
+    rng: np.random.Generator,
+) -> list[np.ndarray]:
+    """
+    Approximate distribution of (A - B) traces by bootstrap pairing.
+
+    Each bootstrap sample picks one trace from A and one from B (with replacement),
+    aligns them to the shared prefix (min length), and subtracts.
+    """
+    if not traces_a or not traces_b or int(n_boot) <= 0:
+        return []
+    out: list[np.ndarray] = []
+    na, nb = len(traces_a), len(traces_b)
+    for _ in range(int(n_boot)):
+        ta = traces_a[int(rng.integers(0, na))]
+        tb = traces_b[int(rng.integers(0, nb))]
+        L = min(len(ta), len(tb))
+        if L <= 0:
+            continue
+        out.append(ta[:L].astype(float) - tb[:L].astype(float))
     return out
 
 
@@ -180,6 +214,33 @@ def main() -> int:
     )
     p.add_argument("--max-gen", type=int, default=None, help="Upper clip on raw series before smoothing (keep 0..max_gen).")
     p.add_argument("--band", choices=["iqr", "minmax", "none"], default="iqr")
+    p.add_argument(
+        "--band-alpha",
+        type=float,
+        default=0.12,
+        help="Transparency for the shaded band (IQR/minmax). Lower = easier to read when bands overlap.",
+    )
+    p.add_argument(
+        "--collapse-alpha",
+        action="store_true",
+        help="Pool all alpha_child conditions (0.3/0.5/0.7) into one column per world. "
+        "Useful for an overall summary, but hides alpha-dependent effects.",
+    )
+    p.add_argument(
+        "--delta-vs",
+        choices=["none", "E2"],
+        default="none",
+        help="Instead of plotting raw metric, plot delta vs baseline plasticity. "
+        "E2 = plot (P1−E2) and (P2−E2) within each (world, alpha) cell. "
+        "This is more comparable across alpha because the objective changes with alpha.",
+    )
+    p.add_argument(
+        "--delta-bootstrap",
+        type=int,
+        default=200,
+        help="When --delta-vs is set: number of bootstrap pairings used to estimate the delta band "
+        "(default 200). Set 0 to disable bands for delta plots.",
+    )
     p.add_argument("--share-y", action="store_true", help="Share Y axis across panels (off by default).")
     p.add_argument(
         "--no-unified-y",
@@ -284,7 +345,9 @@ def main() -> int:
         overlay_col = METRIC_INFO[args.overlay_metric]["col"]
         overlay_ylabel = METRIC_INFO[args.overlay_metric]["ylabel"]
 
-    # group: {(world, alpha, plasticity): [smoothed trace, ...]}
+    alpha_vals: list[float] = [-1.0] if args.collapse_alpha else list(ALPHA_ORDER)
+
+    # group: {(world, alpha_or_pooled, plasticity): [smoothed trace, ...]}
     groups: dict[tuple[str, float, str], list[np.ndarray]] = {}
     groups_ov: dict[tuple[str, float, str], list[np.ndarray]] = {}
     skipped = 0
@@ -296,7 +359,7 @@ def main() -> int:
             skipped += 1
             continue
         alpha = _parse_alpha_str(m.group("alpha"))
-        if alpha not in ALPHA_ORDER:
+        if (not args.collapse_alpha) and (alpha not in ALPHA_ORDER):
             skipped += 1
             continue
         try:
@@ -315,23 +378,77 @@ def main() -> int:
         if tr is None:
             skipped += 1
             continue
+        key_alpha = -1.0 if args.collapse_alpha else float(alpha)
         if args.overlay and overlay_col is not None:
             tro = _series_from_df(df, overlay_col, args.ma_window, args.max_gen, args.min_gen)
             if tro is None:
                 skipped += 1
                 continue
-            groups_ov.setdefault((world, alpha, plasticity), []).append(tro)
-        groups.setdefault((world, alpha, plasticity), []).append(tr)
+            groups_ov.setdefault((world, key_alpha, plasticity), []).append(tro)
+        groups.setdefault((world, key_alpha, plasticity), []).append(tr)
 
     if not groups:
         print("[error] no valid traces collected", file=sys.stderr)
         return 2
 
+    # Optional: convert to delta-vs-E2 view (P1−E2, P2−E2).
+    # We keep uncertainty via bootstrap pairing so the IQR band remains meaningful.
+    if str(args.delta_vs) != "none":
+        if str(args.delta_vs) != "E2":
+            print(f"[error] unsupported --delta-vs {args.delta_vs!r}", file=sys.stderr)
+            return 2
+        rng_delta = np.random.default_rng(0)
+        delta_groups: dict[tuple[str, float, str], list[np.ndarray]] = {}
+        delta_groups_ov: dict[tuple[str, float, str], list[np.ndarray]] = {}
+
+        for world in WORLD_ORDER:
+            for alpha in alpha_vals:
+                e2 = groups.get((world, alpha, "E2"), [])
+                if not e2:
+                    continue
+                for plast in ("P1", "P2"):
+                    t = groups.get((world, alpha, plast), [])
+                    if not t:
+                        continue
+                    deltas = _bootstrap_delta_traces(t, e2, int(args.delta_bootstrap), rng_delta)
+                    if not deltas:
+                        st_t = _stack_traces(t)
+                        st_e = _stack_traces(e2)
+                        mt = np.nanmean(st_t, axis=0)
+                        me = np.nanmean(st_e, axis=0)
+                        L = min(len(mt), len(me))
+                        if L > 0:
+                            deltas = [(mt[:L] - me[:L]).astype(float)]
+                    if deltas:
+                        delta_groups[(world, alpha, plast)] = deltas
+
+                    if args.overlay:
+                        e2o = groups_ov.get((world, alpha, "E2"), [])
+                        to = groups_ov.get((world, alpha, plast), [])
+                        if e2o and to:
+                            deltas_o = _bootstrap_delta_traces(to, e2o, int(args.delta_bootstrap), rng_delta)
+                            if not deltas_o:
+                                st_to = _stack_traces(to)
+                                st_eo = _stack_traces(e2o)
+                                mto = np.nanmean(st_to, axis=0)
+                                meo = np.nanmean(st_eo, axis=0)
+                                L2 = min(len(mto), len(meo))
+                                if L2 > 0:
+                                    deltas_o = [(mto[:L2] - meo[:L2]).astype(float)]
+                            if deltas_o:
+                                delta_groups_ov[(world, alpha, plast)] = deltas_o
+
+        groups = delta_groups
+        groups_ov = delta_groups_ov
+        ylabel = f"Δ {ylabel} vs E2"
+        if args.overlay and overlay_ylabel:
+            overlay_ylabel = f"Δ {overlay_ylabel} vs E2"
+
     fig, axes = plt.subplots(
         nrows=len(WORLD_ORDER),
-        ncols=len(ALPHA_ORDER),
+        ncols=len(alpha_vals),
         figsize=(
-            max(2.0, args.panel_w) * len(ALPHA_ORDER),
+            max(2.0, args.panel_w) * len(alpha_vals),
             max(2.0, args.panel_h) * len(WORLD_ORDER),
         ),
         sharex=True,
@@ -339,7 +456,7 @@ def main() -> int:
     )
     if len(WORLD_ORDER) == 1:
         axes = np.array([axes])
-    if len(ALPHA_ORDER) == 1:
+    if len(alpha_vals) == 1:
         axes = axes.reshape(-1, 1)
 
     gen0 = int(args.min_gen) if (args.min_gen is not None and int(args.min_gen) > 0) else 0
@@ -352,7 +469,7 @@ def main() -> int:
     x_max_seen = gen0
 
     for r, world in enumerate(WORLD_ORDER):
-        for c, alpha in enumerate(ALPHA_ORDER):
+        for c, alpha in enumerate(alpha_vals):
             ax = axes[r, c]
             ax_r = ax.twinx() if args.overlay else None
             if ax_r is not None:
@@ -361,7 +478,8 @@ def main() -> int:
                 for sp in ("top", "right"):
                     ax_r.spines[sp].set_alpha(0.4)
 
-            for plast in PLAST_ORDER:
+            plast_to_plot = ("P1", "P2") if str(args.delta_vs) == "E2" else PLAST_ORDER
+            for plast in plast_to_plot:
                 key = (world, alpha, plast)
                 traces = groups.get(key)
                 if not traces:
@@ -374,17 +492,21 @@ def main() -> int:
                 if args.band == "iqr":
                     lo = np.nanpercentile(stacked, 25, axis=0)
                     hi = np.nanpercentile(stacked, 75, axis=0)
-                    ax.fill_between(gens, lo, hi, color=color, alpha=0.18, linewidth=0)
+                    ax.fill_between(gens, lo, hi, color=color, alpha=float(args.band_alpha), linewidth=0)
                 elif args.band == "minmax":
                     lo = np.nanmin(stacked, axis=0)
                     hi = np.nanmax(stacked, axis=0)
-                    ax.fill_between(gens, lo, hi, color=color, alpha=0.10, linewidth=0)
+                    ax.fill_between(gens, lo, hi, color=color, alpha=float(args.band_alpha), linewidth=0)
                 ax.plot(
                     gens,
                     mean,
                     color=color,
                     linewidth=float(args.line_lw),
-                    label=f"{PLAST_LABEL[plast]}  (n={stacked.shape[0]})",
+                    label=(
+                        f"{PLAST_LABEL[plast]}  (n={stacked.shape[0]})"
+                        if str(args.delta_vs) == "none"
+                        else f"{plast}−E2  (n={stacked.shape[0]})"
+                    ),
                 )
                 if args.unified_y and args.ymin is None:
                     for arr in _collect_ylim_from_plotted(stacked, args.band, mean):
@@ -416,8 +538,10 @@ def main() -> int:
                             ylim_candidates_r.extend(finite_o.tolist())
 
             ax.grid(True, alpha=0.25)
+            if str(args.delta_vs) == "E2":
+                ax.axhline(0.0, color="0.25", lw=0.9, alpha=0.35, zorder=0)
             if r == 0:
-                ax.set_title(f"α_child = {alpha}")
+                ax.set_title("α_child pooled" if args.collapse_alpha else f"α_child = {alpha}")
             if c == 0:
                 ax.set_ylabel(f"{world.capitalize()}\n{ylabel}", fontsize=10)
             else:
@@ -425,7 +549,7 @@ def main() -> int:
             if r == len(WORLD_ORDER) - 1:
                 ax.set_xlabel("Generation")
             if ax_r is not None:
-                if c == len(ALPHA_ORDER) - 1:
+                if c == len(alpha_vals) - 1:
                     ax_r.set_ylabel(overlay_ylabel or "", fontsize=9, color=_OV_RIGHT_AXIS_COLOR)
                 else:
                     ax_r.set_ylabel("")
@@ -434,7 +558,7 @@ def main() -> int:
 
     if not plotted_any:
         print(
-            "[error] nothing to plot — none of the (world, alpha, plasticity) cells had data.",
+            "[error] nothing to plot — none of the requested cells had data.",
             file=sys.stderr,
         )
         return 2
@@ -449,7 +573,7 @@ def main() -> int:
     if args.ymin is not None and args.ymax is not None:
         y_lo, y_hi = float(args.ymin), float(args.ymax)
         for r in range(len(WORLD_ORDER)):
-            for c in range(len(ALPHA_ORDER)):
+            for c in range(len(alpha_vals)):
                 axes[r, c].set_ylim(y_lo, y_hi)
         ylim_note = f"  [y = [{y_lo:.4g}, {y_hi:.4g}]]"
     elif args.unified_y and ylim_candidates:
@@ -459,7 +583,7 @@ def main() -> int:
         pad = args.y_margin * (ymax - ymin)
         y_lo, y_hi = ymin - pad, ymax + pad
         for r in range(len(WORLD_ORDER)):
-            for c in range(len(ALPHA_ORDER)):
+            for c in range(len(alpha_vals)):
                 axes[r, c].set_ylim(y_lo, y_hi)
         ylim_note = f"  [shared y: [{y_lo:.4g}, {y_hi:.4g}]]"
 
@@ -479,7 +603,7 @@ def main() -> int:
             else:
                 yr_lo, yr_hi = (0.0, 1.0)
             for r in range(len(WORLD_ORDER)):
-                for c in range(len(ALPHA_ORDER)):
+                for c in range(len(alpha_vals)):
                     axes[r, c].set_ylim(yr_lo, yr_hi)
             for ax_r in right_axes:
                 ax_r.set_ylim(yr_lo, yr_hi)

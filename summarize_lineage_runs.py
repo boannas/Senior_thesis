@@ -11,6 +11,8 @@ Expected layout under --root:
     <root>/Plastic_1_results/{easy,normal,hard}/<run_dir>/lineage_generations.csv
     <root>/Plastic_2_results/{easy,normal,hard}/<run_dir>/lineage_generations.csv
 
+    Sweep (RUN_GUIDE): ``<root>/Sweep_results/{easy,normal,hard}/E2_thr*_g*_i*_a*_seed*/`` (same for P1_/P2_).
+
 Run-dir name is parsed for: thrT_gG_iI_a{alpha}_seed{S}, e.g.
   E2_thr0_g10_i10_a0p5_seed42
   E3_outadapt_glob_pertick_thr2_g20_i10_a0p3_seed42
@@ -51,7 +53,11 @@ def _parse_alpha_str(s: str) -> float:
 
 
 def _detect_plasticity_and_world(csv_path: str, root: str) -> tuple[str | None, str | None]:
-    """Pull the plasticity tag (E2/P1/P2) and world tag (easy/normal/hard) from path parts."""
+    """Pull the plasticity tag (E2/P1/P2) and world tag (easy/normal/hard) from path parts.
+
+    Also supports RUN_GUIDE sweep layout: ``Sweep_results/<world>/<E2|P1|P2>_thr*_.../`` where
+    plasticity is taken from the run folder prefix when ``Evolved_results/`` is absent.
+    """
     rel = os.path.relpath(csv_path, root)
     parts = rel.split(os.sep)
     plasticity: str | None = None
@@ -61,6 +67,14 @@ def _detect_plasticity_and_world(csv_path: str, root: str) -> tuple[str | None, 
             plasticity = PLASTIC_TAG[p]
         if p in WORLD_TAG and world is None:
             world = p
+    if plasticity is None:
+        run_dir = os.path.basename(os.path.dirname(csv_path))
+        if run_dir.startswith("E2_"):
+            plasticity = "E2"
+        elif run_dir.startswith("P1_"):
+            plasticity = "P1"
+        elif run_dir.startswith("P2_"):
+            plasticity = "P2"
     return plasticity, world
 
 

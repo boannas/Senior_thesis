@@ -27,3 +27,16 @@ run_log.csv
 *.json
 *.txt
 *.png
+/chunks_sweep
+/chunks_emergence
+pending_term_ab
+pending_term_aa
+pending_term_ac
+pending_term_ad
+pending_term_ae
+pending_term_af
+pending_term_ag
+pending_term_ah
+pending_term_ai
+pending_term_aj
+pending_term_ak
