@@ -122,7 +122,7 @@ def main() -> None:
     def _panel(ax, values: np.ndarray, label: str, color: str):
         values = values[np.isfinite(values)]
         # matplotlib 3.9+: labels renamed to tick_labels
-        ax.boxplot([values], tick_labels=[label], showfliers=True, patch_artist=True)
+        ax.boxplot([values], labels=[label], showfliers=True, patch_artist=True)
         # jittered points
         x = np.ones_like(values)
         jitter = (np.random.RandomState(0).randn(len(values)) * 0.03)

@@ -40,6 +40,7 @@ class World:
         food_spawn_n=1,
         use_fixed_weights=False,
         baseline_weights=None,
+        self_motivation_zero_fear_weight=False,
     ):
         random.seed(seed)
 
@@ -62,6 +63,9 @@ class World:
         self.plasticity_segment_kmax = int(plasticity_segment_kmax)
         self.food_spawn_interval = food_spawn_interval
         self.food_spawn_n = food_spawn_n
+        # Ablation: exclude fear from Self motivation blend (fatigue + stress only);
+        # local plasticity deficit for Self matches (no fear_def term).
+        self.self_motivation_zero_fear_weight = bool(self_motivation_zero_fear_weight)
 
         # 8-directional movement + stay
         self.RANDOM_MOVES = [

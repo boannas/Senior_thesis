@@ -9,21 +9,15 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Generated experiment outputs (regenerate with baseline runners)
-test_results/
-
-# Figures from local runs
-plots/
-
 # Local / IDE
 .cursor/
-*.log
-run_log.csv
-/figures_agg
-/figures_agg_out_adp
-/figures_agg_out_loc
-/result_experiment
-*.csv
 *.json
+*.csv
 *.txt
-*.png
+
+*.csv
+*.pkl
+*.pt
+*.npy
+*.npz
+*.zip

@@ -1,0 +1,7 @@
+# checkpoint 2026-05-13T22:36:26.279927
+generation=1500
+best_fitness=0.576
+fitness_mode='ttd_overall'
+alpha_child=0.5
+plasticity_rule=None
+{'forage': {'child_hunger': 0.89745614324511, 'energy_deficit': 0.6770324581791151, 'low_fear': 0.3091265922910609}, 'care': {'child_warmth': 0.9770349080854007, 'closeness_deficit': 0.9224975254830813, 'bonding': 0.8183267746390716}, 'self': {'fatigue': 0.2604265560326276, 'fear': 0.05, 'stress': 0.05}, 'protect': {'child_injury': 1.0, 'fear': 0.3485073904294642, 'closeness_deficit': 0.9989510760335591, 'bonding': 0.6540564351809266}}

@@ -66,7 +66,7 @@ def mother_policy_propose(world):
         )
 
         # --- Motivation selection ---
-        compute_motivations(mother)
+        compute_motivations(mother, world)
         mother.selected_motivation = select_motivation(mother)
 
         # Segment-based credit assignment (optional):
@@ -77,7 +77,7 @@ def mother_policy_propose(world):
         # This is intentionally after selection so "local" deficit can align to the chosen motivation.
         deficit_signal = getattr(world, "plasticity_deficit_signal", "global")
         if deficit_signal == "local":
-            mother._deficit_before = compute_local_deficit(mother, mother.selected_motivation)
+            mother._deficit_before = compute_local_deficit(mother, mother.selected_motivation, world)
         else:
             mother._deficit_before = compute_overall_deficit(mother)
         goal, action, forage_mode = choose_goal_from_motivation(
@@ -228,7 +228,7 @@ def apply_mother_intents(world, intents):
 # Motivation Computation
 # ═══════════════════════════════════════════════════════════════════════
 
-def compute_motivations(mother):
+def compute_motivations(mother, world=None):
     """
     Compute all four motivation scores for a mother based on her
     current states and her child's needs.
@@ -236,7 +236,7 @@ def compute_motivations(mother):
     Motivations:
     - Forage:  driven by child hunger, own energy deficit, low fear
     - Care:    driven by child warmth deficit, closeness deficit, bonding
-    - Self:    driven by fatigue, fear, stress
+    - Self:    driven by fatigue, fear, stress (fear omitted if world.self_motivation_zero_fear_weight)
     - Protect: driven by child injury, fear, closeness deficit, bonding
     """
     normalize = 100.0
@@ -279,12 +279,22 @@ def compute_motivations(mother):
     ) / care_sum
 
     # --- Self motivation ---
-    self_sum = weighted_sum(mw["self"], ['fatigue', 'fear', 'stress'])
-    motivation_self = 100.0 * (
-        mw["self"]["fatigue"] * fatigue +
-        mw["self"]["fear"] * fear +
-        mw["self"]["stress"] * stress
-    ) / self_sum
+    no_self_fear = bool(world is not None and getattr(world, "self_motivation_zero_fear_weight", False))
+    if no_self_fear:
+        self_keys = ("fatigue", "stress")
+        self_sum = weighted_sum(mw["self"], self_keys)
+        motivation_self = 100.0 * (
+            mw["self"]["fatigue"] * fatigue +
+            mw["self"]["stress"] * stress
+        ) / self_sum
+    else:
+        self_keys = ("fatigue", "fear", "stress")
+        self_sum = weighted_sum(mw["self"], self_keys)
+        motivation_self = 100.0 * (
+            mw["self"]["fatigue"] * fatigue +
+            mw["self"]["fear"] * fear +
+            mw["self"]["stress"] * stress
+        ) / self_sum
 
     # --- Protect motivation ---
     protect_sum = weighted_sum(mw["protect"], ['child_injury', 'fear', 'closeness_deficit', 'bonding'])
@@ -302,10 +312,11 @@ def compute_motivations(mother):
     mother.motivations['Protect'] = clamp(motivation_protect)
 
     # --- Store inputs for plasticity learning (used after action) ---
+    self_inputs = {"fatigue": fatigue, "fear": 0.0 if no_self_fear else fear, "stress": stress}
     mother._last_motivation_inputs = {
         "forage":  {"child_hunger": child_hunger, "energy_deficit": energy_deficit, "low_fear": 1.0 - fear},
         "care":    {"child_warmth": child_warmth, "closeness_deficit": closeness_deficit, "bonding": bonding},
-        "self":    {"fatigue": fatigue, "fear": fear, "stress": stress},
+        "self":    self_inputs,
         "protect": {"child_injury": child_injury, "fear": fear, "closeness_deficit": closeness_deficit, "bonding": bonding},
     }
     # Note: deficit_before is stored after motivation selection in mother_policy_propose()
@@ -439,7 +450,7 @@ def compute_overall_deficit(mother):
     return total
 
 
-def compute_local_deficit(mother, selected_motivation):
+def compute_local_deficit(mother, selected_motivation, world=None):
     """
     Compute a motivation-aligned (local) deficit for outcome-gated plasticity.
 
@@ -477,6 +488,8 @@ def compute_local_deficit(mother, selected_motivation):
     if sel == "care":
         return child_warmth_def + closeness_def + bonding_def
     if sel == "self":
+        if world is not None and getattr(world, "self_motivation_zero_fear_weight", False):
+            return fatigue_def + stress_def
         return fatigue_def + fear_def + stress_def
     if sel == "protect":
         return child_injury_def + fear_def + closeness_def + bonding_def
@@ -531,7 +544,7 @@ def update_plasticity(mother, action, world):
 
     deficit_signal = getattr(world, "plasticity_deficit_signal", "global")
     if deficit_signal == "local":
-        deficit_after = compute_local_deficit(mother, mother.selected_motivation)
+        deficit_after = compute_local_deficit(mother, mother.selected_motivation, world)
     else:
         deficit_after = compute_overall_deficit(mother)
     inputs = getattr(mother, "_last_motivation_inputs", None)
@@ -641,7 +654,7 @@ def _plasticity_deficit_now(mother, world, selected_motivation):
     """Compute deficit using current world plasticity deficit signal setting."""
     deficit_signal = getattr(world, "plasticity_deficit_signal", "global")
     if deficit_signal == "local":
-        return compute_local_deficit(mother, selected_motivation)
+        return compute_local_deficit(mother, selected_motivation, world)
     return compute_overall_deficit(mother)
 
 

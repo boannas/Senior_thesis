@@ -1,0 +1,5 @@
+# evolve_lineage run 2026-05-06T06:17:43.096864
+# plasticity_rule='outcome_adaptive'
+# best_generation=3106
+best_fitness=0.6255999999999999
+{'forage': {'child_hunger': 0.24928400548600418, 'energy_deficit': 0.5114476552267834, 'low_fear': 0.4617094058449989}, 'care': {'child_warmth': 0.1516228845573984, 'closeness_deficit': 0.424312319105111, 'bonding': 0.5845372516115075}, 'self': {'fatigue': 0.41849229473117455, 'fear': 0.6153326819820353, 'stress': 0.43561051766210457}, 'protect': {'child_injury': 0.43225878326320655, 'fear': 0.42842708569846555, 'closeness_deficit': 0.5372120216202557, 'bonding': 0.4553073482428629}}

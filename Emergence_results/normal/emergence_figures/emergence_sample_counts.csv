@@ -1,0 +1,10 @@
+init,plasticity,n_runs
+anti_maternal,E2,10
+anti_maternal,P1,10
+anti_maternal,P2,10
+pro_maternal,E2,10
+pro_maternal,P1,10
+pro_maternal,P2,10
+random_uniform,E2,10
+random_uniform,P1,10
+random_uniform,P2,10

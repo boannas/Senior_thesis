@@ -99,6 +99,7 @@ def _world_from_genome_and_seed(seed: int, genome: dict, cfg: dict) -> World:
         food_spawn_n=int(cfg.get("food_spawn_n", 1)),
         use_fixed_weights=True,
         baseline_weights=copy.deepcopy(genome),
+        self_motivation_zero_fear_weight=bool(cfg.get("self_motivation_zero_fear_weight", False)),
     )
 
 
@@ -210,6 +211,11 @@ def _parse_args():
         default=20,
         help="For segment_capped: max ticks per segment before forced update.",
     )
+    p.add_argument(
+        "--ablate-self-motivation-fear",
+        action="store_true",
+        help="Exclude fear from Self motivation (fatigue+stress only); local Self deficit omits fear.",
+    )
     return p.parse_args()
 
 
@@ -272,6 +278,7 @@ def main():
         "plasticity_learn_w": args.learn_w == "on",
         "plasticity_update_mode": args.update_mode,
         "plasticity_segment_kmax": int(args.segment_kmax),
+        "self_motivation_zero_fear_weight": bool(args.ablate_self_motivation_fear),
     }
 
     base_seed = int(args.seed)

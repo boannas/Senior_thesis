@@ -1,0 +1,1 @@
+run_evolve_lineage.py --generations 3000 --episodes 10 --max-ticks 1000 --grid-w 15 --grid-h 15 --threats 1 --food-spawn-interval 15 --food-spawn-n 1 --fitness-mode ttd_overall --alpha-child 0.5 --seed-master 42 --init-seed 42 --init-mode anti_maternal --init-noise 0.05 --plasticity none --checkpoint-every 500 --output-dir Emergence_results/normal/E2_anti_maternal_seed42

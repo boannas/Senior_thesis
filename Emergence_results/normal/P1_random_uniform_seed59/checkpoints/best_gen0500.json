@@ -1,0 +1,23 @@
+{
+  "forage": {
+    "child_hunger": 0.8222659635838014,
+    "energy_deficit": 0.15389006585667553,
+    "low_fear": 1.0
+  },
+  "care": {
+    "child_warmth": 0.19493854979808506,
+    "closeness_deficit": 0.5395436934568885,
+    "bonding": 0.1811022882205136
+  },
+  "self": {
+    "fatigue": 0.05,
+    "fear": 0.4696718740339968,
+    "stress": 0.3403946753369693
+  },
+  "protect": {
+    "child_injury": 0.45074734894497337,
+    "fear": 0.3527576448744582,
+    "closeness_deficit": 0.4128977090355015,
+    "bonding": 0.5446566677420405
+  }
+}
