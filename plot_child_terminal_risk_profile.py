@@ -108,23 +108,89 @@ def _first_child_death_index(hunger: np.ndarray) -> int | None:
     return int(np.argmax(bad))
 
 
+# def _terminal_window_means(df: pd.DataFrame, *, window: int) -> dict[str, float]:
+#     hunger = pd.to_numeric(df["c0_hunger"], errors="coerce").to_numpy(dtype=float)
+#     death_i = _first_child_death_index(hunger)
+#     if death_i is None:
+#         lo = max(0, len(hunger) - window)
+#         hi = len(hunger)
+#     else:
+#         last_alive = death_i - 1
+#         if last_alive < 0:
+#             nan5 = {k: float("nan") for k in ("t_mean", "w_mean", "i_mean", "f_mean", "rho_fear_injury")}
+#             nan5["child_death_tick"] = float("nan")
+#             nan5["n_terminal_ticks"] = 0.0
+#             return nan5
+#         lo = max(0, last_alive - window + 1)
+#         hi = death_i
+
+#     sl = slice(lo, hi)
+#     t = pd.to_numeric(df["c0_hunger"], errors="coerce").to_numpy(dtype=float)[sl]
+#     w = pd.to_numeric(df["c0_warmth"], errors="coerce").to_numpy(dtype=float)[sl]
+#     inj = pd.to_numeric(df["c0_injury"], errors="coerce").to_numpy(dtype=float)[sl]
+#     fear = pd.to_numeric(df["m0_fear_threat"], errors="coerce").to_numpy(dtype=float)[sl]
+
+#     def _safe_mean(arr: np.ndarray) -> float:
+#         a = arr[np.isfinite(arr)]
+#         return float(np.mean(a)) if a.size else float("nan")
+
+#     alive_m = np.isfinite(t) & np.isfinite(w) & np.isfinite(inj)
+#     out: dict[str, float] = {
+#         "t_mean": _safe_mean(t[alive_m]) if alive_m.any() else float("nan"),
+#         "w_mean": _safe_mean(w[alive_m]) if alive_m.any() else float("nan"),
+#         "i_mean": _safe_mean(inj[alive_m]) if alive_m.any() else float("nan"),
+#         "f_mean": _safe_mean(fear[alive_m]) if alive_m.any() else float("nan"),
+#     }
+
+#     # alive child ticks for rho (full trajectory, not only terminal window)
+#     ch_ok = np.isfinite(hunger)
+#     fi = pd.to_numeric(df["m0_fear_threat"], errors="coerce").to_numpy(dtype=float)
+#     ci = pd.to_numeric(df["c0_injury"], errors="coerce").to_numpy(dtype=float)
+#     m = ch_ok & np.isfinite(fi) & np.isfinite(ci)
+#     out["rho_fear_injury"] = _spearman(fi[m], ci[m])
+#     out["child_death_tick"] = float(death_i + 1) if death_i is not None else float("nan")
+#     out["n_terminal_ticks"] = float(int(np.sum(alive_m)))
+#     return out
+
+
 def _terminal_window_means(df: pd.DataFrame, *, window: int) -> dict[str, float]:
     hunger = pd.to_numeric(df["c0_hunger"], errors="coerce").to_numpy(dtype=float)
     death_i = _first_child_death_index(hunger)
-    if death_i is None:
+
+    child_died = death_i is not None
+    child_survived = death_i is None
+
+    if child_survived:
+        # Living child: use last W ticks of the whole log
         lo = max(0, len(hunger) - window)
         hi = len(hunger)
+        terminal_window_type = "end_survival"
+
     else:
+        # Dead child: use last W alive ticks before death
         last_alive = death_i - 1
+
         if last_alive < 0:
-            nan5 = {k: float("nan") for k in ("t_mean", "w_mean", "i_mean", "f_mean", "rho_fear_injury")}
-            nan5["child_death_tick"] = float("nan")
-            nan5["n_terminal_ticks"] = 0.0
-            return nan5
+            # Edge case: child already dead at first logged row
+            return {
+                "t_mean": float("nan"),
+                "w_mean": float("nan"),
+                "i_mean": float("nan"),
+                "f_mean": float("nan"),
+                "rho_fear_injury": float("nan"),
+                "child_death_tick": float(death_i + 1),
+                "child_died": 1.0,
+                "child_survived": 0.0,
+                "n_terminal_ticks": 0.0,
+                "terminal_window_type": "no_alive_before_death",
+            }
+
         lo = max(0, last_alive - window + 1)
         hi = death_i
+        terminal_window_type = "pre_death"
 
     sl = slice(lo, hi)
+
     t = pd.to_numeric(df["c0_hunger"], errors="coerce").to_numpy(dtype=float)[sl]
     w = pd.to_numeric(df["c0_warmth"], errors="coerce").to_numpy(dtype=float)[sl]
     inj = pd.to_numeric(df["c0_injury"], errors="coerce").to_numpy(dtype=float)[sl]
@@ -135,6 +201,7 @@ def _terminal_window_means(df: pd.DataFrame, *, window: int) -> dict[str, float]
         return float(np.mean(a)) if a.size else float("nan")
 
     alive_m = np.isfinite(t) & np.isfinite(w) & np.isfinite(inj)
+
     out: dict[str, float] = {
         "t_mean": _safe_mean(t[alive_m]) if alive_m.any() else float("nan"),
         "w_mean": _safe_mean(w[alive_m]) if alive_m.any() else float("nan"),
@@ -142,16 +209,22 @@ def _terminal_window_means(df: pd.DataFrame, *, window: int) -> dict[str, float]
         "f_mean": _safe_mean(fear[alive_m]) if alive_m.any() else float("nan"),
     }
 
-    # alive child ticks for rho (full trajectory, not only terminal window)
+    # Spearman over the full child-alive trajectory, not only terminal window
     ch_ok = np.isfinite(hunger)
     fi = pd.to_numeric(df["m0_fear_threat"], errors="coerce").to_numpy(dtype=float)
     ci = pd.to_numeric(df["c0_injury"], errors="coerce").to_numpy(dtype=float)
     m = ch_ok & np.isfinite(fi) & np.isfinite(ci)
-    out["rho_fear_injury"] = _spearman(fi[m], ci[m])
-    out["child_death_tick"] = float(death_i + 1) if death_i is not None else float("nan")
-    out["n_terminal_ticks"] = float(int(np.sum(alive_m)))
-    return out
 
+    out["rho_fear_injury"] = _spearman(fi[m], ci[m])
+
+    # Explicit survival / death labels
+    out["child_death_tick"] = float(death_i + 1) if child_died else float("nan")
+    out["child_died"] = 1.0 if child_died else 0.0
+    out["child_survived"] = 1.0 if child_survived else 0.0
+    out["n_terminal_ticks"] = float(int(np.sum(alive_m)))
+    out["terminal_window_type"] = terminal_window_type
+
+    return out
 
 def _collect_root(root: str, *, window: int) -> pd.DataFrame:
     root = os.path.abspath(root)
@@ -160,6 +233,7 @@ def _collect_root(root: str, *, window: int) -> pd.DataFrame:
         raise SystemExit(f"No run_*.csv under {root}/*/")
 
     by_key: dict[tuple[str, str, int], list[dict]] = {}
+    run_rows = []
     skipped = 0
     for p in paths:
         rd = os.path.basename(os.path.dirname(p))
@@ -181,15 +255,30 @@ def _collect_root(root: str, *, window: int) -> pd.DataFrame:
         met["plasticity"] = m.group("plast")
         met["init"] = m.group("init")
         met["evolve_seed"] = int(m.group("seed"))
+        met["child_status"] = "dead" if met["child_died"] == 1.0 else "alive"
+        run_rows.append(met.copy())
         key = (met["plasticity"], met["init"], met["evolve_seed"])
         by_key.setdefault(key, []).append(met)
 
     rows = []
     for (plast, init, seed), lst in by_key.items():
-        acc = {k: [] for k in ("t_mean", "w_mean", "i_mean", "f_mean", "rho_fear_injury", "child_death_tick")}
+        # acc = {k: [] for k in ("t_mean", "w_mean", "i_mean", "f_mean", "rho_fear_injury", "child_death_tick")}
+        acc = {
+            k: []
+            for k in (
+                "t_mean",
+                "w_mean",
+                "i_mean",
+                "f_mean",
+                "rho_fear_injury",
+                "child_death_tick",
+                "child_died",
+                "child_survived",
+            )
+        }
         for r in lst:
             for k in acc:
-                acc[k].append(r[k])
+                acc[k].append(r.get(k, np.nan))
         rows.append(
             {
                 "plasticity": plast,
@@ -205,10 +294,49 @@ def _collect_root(root: str, *, window: int) -> pd.DataFrame:
             }
         )
 
+        n_runs = len(lst)
+        n_child_died_runs = int(np.nansum(acc["child_died"]))
+        n_child_survived_runs = int(np.nansum(acc["child_survived"]))
+        death_rate = n_child_died_runs / n_runs if n_runs > 0 else float("nan")
+
+        death_ticks = np.asarray(acc["child_death_tick"], dtype=float)
+        finite_death_ticks = death_ticks[np.isfinite(death_ticks)]
+
+        rows.append(
+            {
+                "plasticity": plast,
+                "init": init,
+                "evolve_seed": seed,
+                "n_runs": n_runs,
+
+                # New survival/death summary
+                "n_child_died_runs": n_child_died_runs,
+                "n_child_survived_runs": n_child_survived_runs,
+                "death_rate": float(death_rate),
+
+                # Terminal state means, including both dead and survived runs
+                "terminal_hunger_mean": float(np.nanmean(acc["t_mean"])),
+                "terminal_warmth_mean": float(np.nanmean(acc["w_mean"])),
+                "terminal_injury_mean": float(np.nanmean(acc["i_mean"])),
+                "terminal_mother_fear_mean": float(np.nanmean(acc["f_mean"])),
+
+                "spearman_fear_injury_alive": float(np.nanmean(acc["rho_fear_injury"])),
+
+                # Median death tick only among runs where child actually died
+                "median_child_death_tick": (
+                    float(np.nanmedian(finite_death_ticks))
+                    if finite_death_ticks.size > 0
+                    else float("nan")
+                ),
+            }
+        )
+
     out_df = pd.DataFrame(rows)
     out_df["death_pathway_proxy"] = out_df.apply(_death_pathway_proxy, axis=1)
     print(f"[ok] {root}: {len(out_df)} genomes from {len(paths)} runs (skipped dirs/runs={skipped})")
-    return out_df
+    # return out_df
+    run_df = pd.DataFrame(run_rows)
+    return out_df, run_df
 
 
 def _death_pathway_proxy(row: pd.Series) -> str:
@@ -270,7 +398,12 @@ def plot_terminal_grid(df: pd.DataFrame, *, window: int, out_png: str, title: st
             ylab = f"mean in terminal window\n({short_name})" if j == 0 else ""
             _box_panel(ax, sub, col=col, ylabel=ylab)
             ax.set_title(f"{plast}\n{short_name}", fontsize=9)
-    fig.suptitle(f"{title}\nW={window} ticks before first non-finite c0_hunger (child death in log)", fontsize=11, y=1.01)
+    # fig.suptitle(f"{title}\nW={window} ticks before first non-finite c0_hunger (child death in log)", fontsize=11, y=1.01)
+    fig.suptitle(
+    f"{title}\nTerminal window: last W alive ticks before death, or last W ticks if child survived",
+    fontsize=11,
+    y=1.01,
+)
     fig.tight_layout()
     fig.savefig(out_png, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -431,6 +564,43 @@ def write_pathway_counts(df: pd.DataFrame, out_csv: str) -> None:
     g.to_csv(out_csv, index=False)
     print("[ok] wrote", out_csv)
 
+def plot_death_rate_by_init(df: pd.DataFrame, *, out_png: str, title: str) -> None:
+    fig, axes = plt.subplots(1, 3, figsize=(12.0, 3.8), sharey=True)
+
+    for ax, plast in zip(axes, PLAST_ORDER):
+        sub = df[df["plasticity"] == plast]
+
+        vals = []
+        labels = []
+
+        for init in INIT_ORDER:
+            s = sub[sub["init"] == init]
+            vals.append(pd.to_numeric(s["death_rate"], errors="coerce").dropna().to_numpy(dtype=float))
+            labels.append(init.replace("_", " "))
+
+        bp = ax.boxplot(
+            vals,
+            labels=labels,
+            patch_artist=True,
+            widths=0.55,
+            medianprops=dict(color="#F28E2B", linewidth=1.5),
+        )
+
+        for patch, init in zip(bp["boxes"], INIT_ORDER):
+            patch.set_facecolor(INIT_COLORS[init])
+            patch.set_alpha(0.35)
+
+        ax.set_ylim(-0.02, 1.02)
+        ax.set_ylabel("death rate")
+        ax.set_title(plast)
+        ax.tick_params(axis="x", rotation=15)
+
+    fig.suptitle(title + "\nChild death rate by mother init type", fontsize=11, y=1.03)
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=200, bbox_inches="tight")
+    plt.close(fig)
+    print("[ok] wrote", out_png)
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -444,10 +614,21 @@ def main() -> int:
     out_dir = os.path.abspath(args.out_dir) if args.out_dir else os.path.join(root, "figures_child_terminal_profile")
     os.makedirs(out_dir, exist_ok=True)
 
-    df = _collect_root(root, window=args.window)
+    # df = _collect_root(root, window=args.window)
+    # csv_path = os.path.join(out_dir, "child_terminal_profile_per_genome.csv")
+    # df.to_csv(csv_path, index=False)
+    # print("[ok] wrote", csv_path)
+
+    df, run_df = _collect_root(root, window=args.window)
+
     csv_path = os.path.join(out_dir, "child_terminal_profile_per_genome.csv")
     df.to_csv(csv_path, index=False)
     print("[ok] wrote", csv_path)
+
+    run_csv_path = os.path.join(out_dir, "child_terminal_profile_per_run.csv")
+    run_df.to_csv(run_csv_path, index=False)
+    print("[ok] wrote", run_csv_path)
+
 
     prefix = (args.title + " — ") if args.title else ""
     plot_terminal_grid(
@@ -484,6 +665,11 @@ def main() -> int:
     plot_terminal_state_histograms(
         df,
         out_png=os.path.join(out_dir, "terminal_state_hist_by_mother_type.png"),
+        title=prefix + os.path.basename(root),
+    )
+    plot_death_rate_by_init(
+        df,
+        out_png=os.path.join(out_dir, "death_rate_by_init.png"),
         title=prefix + os.path.basename(root),
     )
     return 0
