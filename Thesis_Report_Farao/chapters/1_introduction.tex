@@ -1,0 +1,186 @@
+\newpage
+\chapter{Introduction}
+
+% ===== Background =====
+\section{Background}
+\noindent
+
+\textit{``The only way we can safely live with AI in the long term may be to give it something like maternal instinct.''}
+\par\medskip
+--- \textsc{Geoffrey Hinton}, quoted in \emph{Fortune}, Aug 2025 \cite{fortune2025} \vspace{10pt}
+
+Geoffrey Hinton, often called the `Godfather of AI', suggests that as artificial intelligence grows more powerful, traditional control methods, such as hard-coded rules or external constraints will not be enough to ensure safety. Instead, AI should be endowed with an intrinsic drive seen in maternal behavior. In Hinton's view, only by embedding empathy and care at a fundamental level can humans coexist safely with advanced AI systems. But what does `maternal instinct' mean in computational terms? And can it be engineered or must it evolve?
+
+Maternal instinct is not a single trait, but an evolved behavioral architecture shaped by millions of years of selection pressure. It encompasses rapid threat detection and protective responses, allocation of limited resources toward vulnerable dependents, tolerance of personal cost for offspring welfare, flexible adaptation to environmental conditions, and critically for social species the capacity to extend caregiving beyond one's own genetic offspring. This last feature, alloparental care or `altruistic nurturing' forms the biological foundation for broader prosocial behavior in human and animal societies.
+
+For artificial systems, replicating this architecture presents a fundamental challenge. Unlike programmed ethical rules or learned reward functions, biological maternal strategies emerge from the interaction of genetic predispositions, hormonal modulation, neural circuits, and environmental pressures throughout evolutionary time. The result is not rigid altruism but adaptive cooperative agents that balance self-interest with group welfare depending on context.
+
+The importance of maternal care extends beyond biology into culture and symbolism. Across human societies, the archetype of "Mother" represents unconditional care, selfless protection, and the willingness to prioritize the welfare of another over one's own. From religious iconography to philosophical ideals, this figure embodies humanity's recognition that civilization itself rests on the capacity to care for the vulnerable. Evolutionary psychologists argue this is no accident the neural and hormonal circuits that evolved for infant care became the cognitive scaffold for broader empathy and moral reasoning. Maternal instinct, in this view, is not merely about raising offspring it is the biological root of all prosocial behavior, the evolutionary foundation upon which human cooperation is built. 
+
+
+
+Recent advances in neuroscience highlight how maternal behavior emerges from layered biological mechanisms: genetic variation in oxytocin receptors creates baseline prosocial tendencies, hormonal systems dynamically modulate these tendencies based on stress and reproductive state, and neural circuits integrate infant cues with threat assessment to guide rapid caregiving decisions. This architecture provides a blueprint for artificial agents.
+
+However, simply mimicking these mechanisms in isolation is insufficient. In biological systems, the effectiveness of maternal strategies depends on their fit with environmental conditions. Kin-selective care dominates when resources are abundant and threats minimal, cooperative breeding emerges in harsh environments where group defense provides survival advantages, competitive territoriality arises when resources are scarce and defensible. The context dependence suggests that prosocial behavior cannot be hard-coded but must emerge through selection pressures that favor strategies adaptive to specific ecological niches.
+
+
+
+This thesis investigates whether maternal-like caregiving behavior can emerge in artificial agents through biologically inspired internal regulation mechanisms. Rather than explicitly programming cooperative behavior through reward engineering or fixed rules, the proposed framework models maternal decision making as the interaction between homeostatic internal states, hormone-like modulators, and competing motivational drives within an agent-based simulation environment.
+
+In the proposed model, maternal agents maintain a set of internal physiological and psychological states representing simplified biological processes. These include energy and fatigue as homeostatic variables, and hormone-like signals such as oxytocin and cortisol that modulate caregiving and stress responses. These internal states influence a motivational system in which multiple behavioral drives—such as foraging, caregiving, self-recovery, and protection—compete for action selection.
+
+Behavior is determined through a weighted integration of internal signals rather than explicit reward optimization. The agent selects actions by choosing the motivation with the highest activation at each timestep. To allow adaptation over time, the system includes plasticity mechanisms that adjust the influence of internal signals on motivations based on behavioral outcomes. Through repeated interaction with the environment, maternal strategies emerge from the dynamic interaction between internal regulation, environmental conditions, and learning.
+
+In addition to lifetime plasticity, the thesis studies evolutionary adaptation of inherited motivation weights. In this implementation, evolution is performed as a single-lineage search: at each generation a candidate genome is produced by Gaussian mutation, evaluated over multiple stochastic rollouts (different random seeds), and accepted only if mean fitness improves. This captures selection pressure across generations while remaining computationally tractable.
+
+
+
+In essence, this research addresses Hinton's challenge by operationalizing 'maternal instinct' as an emergent property of evolutionary dynamics rather than an engineered feature. By grounding agent design in the biological mechanisms that produce adaptive maternal behavior—genetic encoding, hormonal modulation, neural decision-making—and subjecting these agents to selection pressures analogous to those faced by biological mothers, we can identify the minimal requirements for prosocial AI. The question is no longer whether machines can be programmed to care, but whether the capacity for genuine, context-appropriate compassion can arise through the same evolutionary processes that produced it in nature. This thesis provides a computational framework to test that hypothesis, offering insights into how future AI systems might develop the intrinsic motivation for cooperation that Hinton argues is essential for safe long-term human-AI coexistence.
+
+
+
+
+
+
+The resulting architecture integrates three components: internal physiological regulation, a motivational decision system, and evolutionary adaptation across generations. Together these mechanisms form a biologically inspired framework for studying how caregiving behavior can emerge in artificial agents.
+
+\paragraph{Operational definition of ``emergence'' in this thesis.}
+Because caregiving is not directly rewarded by an external task objective, we treat maternal behavior as \emph{emergent} when it becomes measurable through convergent changes in outcomes and conditional behaviors. Concretely, emergence is assessed by (i) improved normalized time-to-death (TTD) for the child and mother and reduced child injury under the fitness function, (ii) increased conditional action probabilities that align with child needs (e.g., higher $P(\text{Forage}\mid\text{hungry})$, $P(\text{Care}\mid\text{cold})$, $P(\text{Protect}\mid\text{injured})$), and (iii) systematic shifts in evolved motivation weights away from anti-maternal or random initializations. This multi-view definition avoids attributing emergence to a single metric and supports interpretation of \emph{why} survival improves.
+
+
+
+% ===== Problem Statement =====
+\section{Problem Statement}
+% The specific computational problem 
+% The gap in existing research
+% Why existing approaches are insufficient 
+% Core Research question
+
+\subsection{Current Challenges}
+
+As artificial intelligence systems become increasingly autonomous and integrated into human environments, the challenge of creating artificial agents capable of exhibiting genuine prosocial behavior—such as cooperation, empathy, and altruism—has become critical. Current approaches to multi-agent cooperation typically rely on one of three strategies: explicit reward engineering, in which designers manually construct reward functions that incentivize cooperative behavior; rule-based systems, where agents follow programmed ethical guidelines; or reinforcement learning with carefully designed social reward signals. While these approaches can produce functional cooperation in constrained scenarios, they suffer from fundamental limitations.
+
+First, hand-designed reward functions often fail to generalize beyond their training conditions, resulting in agents that cooperate only in anticipated or explicitly trained situations. Second, rule-based ethical systems are inherently rigid and unable to adapt to the nuanced, context-dependent decisions required in complex social environments. Third, behaviors learned through standard reinforcement learning can be brittle, with agents discovering strategies that technically maximize rewards while violating the intended cooperative behavior. Most critically, none of these approaches produce agents with an intrinsic motivation for prosocial behavior; cooperation remains instrumental rather than genuine, existing only as long as external incentives maintain it.
+
+These limitations highlight the need for alternative approaches that can generate intrinsic motivations for cooperative behavior rather than relying solely on external reward signals or predefined rules. Biological systems provide a compelling example of such intrinsic motivations. In many species, maternal caregiving behavior emerges from internal physiological regulation, hormonal modulation, and neural decision mechanisms shaped by evolutionary pressures. These mechanisms produce flexible and context-dependent caregiving responses without requiring explicit reward optimization.
+
+Despite extensive research in multi-agent cooperation, relatively little work has explored biologically grounded architectures that integrate internal physiological regulation, motivational decision systems, and evolutionary dynamics within artificial agents. Most existing computational models treat agents as abstract decision-makers optimized through reward functions rather than as organisms whose behavior emerges from internal regulatory processes interacting with environmental pressures. Consequently, the minimal mechanisms required for intrinsic prosocial motivation in artificial systems remain poorly understood.
+
+
+
+\subsection{The Biological Solution}
+
+In contrast, biological systems have evolved robust and adaptive prosocial behaviors through millions of years of evolutionary selection. Maternal caregiving represents a particularly powerful example: mothers across many species exhibit flexible strategies that balance self-interest with offspring welfare, extend care to non-kin under certain conditions, and adapt their behavior dynamically to environmental pressures such as resource scarcity and predation risk. These behaviors emerge not from explicit rules but from the interaction of genetic predispositions, hormonal modulation, neural decision circuits, and ecological pressures acting across evolutionary timescales.
+
+This biological perspective suggests a fundamentally different paradigm for creating prosocial artificial agents. Rather than prescribing cooperative behavior through explicit engineering, cooperation may be allowed to emerge through evolutionary mechanisms analogous to those observed in nature. If agents possess heritable variation in behavioral tendencies and experience environmental selection pressures, adaptive prosocial strategies may arise spontaneously without the need for manually designed reward functions or rigid ethical rules.
+
+However, translating these biological principles into computational systems remains a significant challenge. Biological maternal behavior arises from complex interactions between physiological regulation, neural decision processes, and evolutionary adaptation. Designing artificial agents that capture these mechanisms in a simplified but meaningful way requires new computational frameworks capable of integrating internal state regulation, motivational decision systems, and evolutionary dynamics.
+
+This thesis investigates such a framework through an evolutionary agent-based simulation of maternal caregiving behavior. Artificial maternal agents maintain internal physiological states and hormone-like signals that influence a motivational decision system governing caregiving, foraging, protection, and self-maintenance behaviors. Over longer evolutionary timescales, inherited motivation weights are adapted via a single-lineage search (mutation and accept-if-better selection based on mean fitness across multiple stochastic rollouts), allowing behavioral parameters to improve across generations. Through this interaction between internal regulation, plasticity, and evolutionary selection, the model explores how maternal-like caregiving strategies may emerge under varying environmental conditions.
+
+\subsection{Research Questions}
+
+This thesis addresses the following research questions:
+
+\textbf{Central Research Question:}
+
+How can biologically inspired internal regulatory mechanisms—such as homeostatic states, hormone-like signals, and competing motivational drives—produce adaptive maternal caregiving behavior in artificial agents without relying on explicit reward engineering?
+
+\noindent\textbf{Supporting Research Questions:}
+
+\begin{enumerate}
+
+\item Biological Mechanisms:
+\begin{itemize}
+\item How do internal physiological states (such as energy and fatigue) and hormone-like signals (such as oxytocin and cortisol) influence maternal decision making?
+\item How do interactions between bonding, fear, and stress affect caregiving behavior?
+\item What minimal set of internal regulatory mechanisms is necessary to produce stable maternal caregiving strategies in artificial agents?
+\end{itemize}
+
+\item Environmental Conditions (within a fixed dyadic setting):
+\begin{itemize}
+\item How do food availability (food spawn interval) and threat difficulty (number of threats) change the balance among Forage, Care, Self, and Protect?
+\item Do evolved strategies generalize to unseen environment conditions (E4 transfer: world difficulty $\times$ food interval)?
+\end{itemize}
+
+\item Evolutionary and Plasticity Dynamics:
+\begin{itemize}
+\item Do caregiving-related weights and behavioral signatures reliably improve from anti-maternal and random initializations under selection?
+\item How do plasticity settings (E2/P1/P2) change the speed and stability of improvement?
+\end{itemize}
+
+\item Computational Framework:
+\begin{itemize}
+\item How can biological maternal care mechanisms—such as hormonal modulation, internal regulation, and evolutionary selection—be meaningfully abstracted as computational agent parameters?
+\item Which modeling assumptions are necessary to capture the essential dynamics of maternal caregiving behavior?
+\item Can insights from evolutionary maternal care models inform the design of prosocial artificial agents?
+\end{itemize}
+
+\end{enumerate}
+
+
+
+% ===== Research Objectives =====
+\section{Research Objectives}
+
+\begin{enumerate}
+
+\item To implement a biologically inspired maternal agent architecture with internal physiological states (energy, fatigue), hormone-like modulators (oxytocin, cortisol), and psychological states (bonding, fear, stress, closeness) driving motivational competition.
+
+\item To study whether adaptive caregiving and protection can emerge from weighted internal regulation rather than explicit reward engineering, using the argmax selection of motivations (Forage, Care, Self, Protect).
+
+\item To evolve inherited motivation weights through a single-lineage evolutionary search (mutation + accept-if-better selection), using fitness tied to child and mother survival outcomes with a small injury penalty.
+
+\item To test robustness and generalization by evaluating evolved genomes across unseen environment conditions (E4: world difficulty $\times$ food interval) and comparing across plasticity regimes (E2/P1/P2).
+
+\end{enumerate}
+
+
+
+
+% ===== Scope and Limitations ======
+\section{Scope and Limitations}
+
+\subsection{Scope (what is implemented and evaluated)}
+This thesis studies a minimal dyadic setting: a single mother--child pair embedded in a discrete grid-world with food resources and optional threats. Maternal behavior emerges from (i) internal state regulation (energy, fatigue; bonding, fear, stress, closeness) and two hormone-like modulators (oxytocin and cortisol), (ii) motivational competition among four drives (Forage, Care, Self, Protect) with argmax action selection, and (iii) adaptation across time scales via plasticity (within lifetime) and evolutionary selection (across generations).
+
+\subsection{Experimental design (what is compared)}
+We compare three initialization regimes (anti-maternal, random, pro-maternal) and three plasticity regimes (E2: evolution-only, P1: plastic during evolution, P2: evolved genome with runtime plasticity). Robustness is tested via E4 transfer: nine unseen conditions formed by world difficulty $\{\text{easy},\text{normal},\text{hard}\}$ and food interval $\{5,15,25\}$. Each evaluation uses multiple stochastic rollouts (different random seeds) and reports median/IQR trends across evolved genomes.
+
+\subsection{Measurements (what we report)}
+The primary outcomes are normalized time-to-death (child and mother), child injury, conditional action probabilities (e.g., $P(\text{Forage}\mid\text{hungry})$, $P(\text{Care}\mid\text{cold})$, $P(\text{Protect}\mid\text{injured})$), evolved motivation weights, and child death-cause mixtures (hunger/cold/injury/alive) for interpretability.
+
+\subsection{Limitations (what is not modeled)}
+The current implementation does not include kin recognition, multiple families in the same world, explicit alloparental care, communication, or co-evolution of child signaling. Evolution is implemented as a single-lineage accept-if-better search rather than a population genetic model. These limitations are discussed in Chapter~5 as opportunities for future work.
+
+
+% ===== Significance and Expected Contributions =====
+\section{Significance and Expected Contributions}
+
+This research addresses fundamental questions at the intersection of evolutionary biology, artificial intelligence, and multi-agent systems. By investigating how maternal caregiving behavior can emerge through biologically inspired internal regulation and evolutionary processes, this study contributes to the understanding of how intrinsic prosocial behavior may arise in artificial agents without explicit reward engineering or rigid rule-based control.
+
+The expected contributions of this thesis include several areas:
+
+\textbf{Theoretical Contribution:}
+This research provides a conceptual framework linking biological maternal caregiving mechanisms with computational agent architectures. By integrating internal physiological regulation, hormone-like signals, motivational decision systems, and evolutionary adaptation, the study contributes to theoretical understanding of how complex prosocial behaviors may emerge from relatively simple internal mechanisms.
+
+\textbf{Methodological Contribution:}
+The thesis develops an evolutionary agent-based simulation model that combines internal state regulation, motivational competition, behavioral plasticity, and generational selection. This modeling framework provides a platform for investigating how caregiving behavior evolves under varying environmental conditions.
+
+\textbf{Empirical Contribution:}
+Through systematic simulation experiments, the research identifies how food scarcity and threat difficulty shape the emergence and failure modes of caregiving strategies, and how plasticity modulates the evolutionary trajectory and generalization to unseen conditions.
+
+\textbf{Design Implications for Artificial Intelligence:}
+The findings of this work offer biologically inspired design principles for developing artificial agents capable of adaptive prosocial behavior. Such principles may inform future research on cooperative AI systems, social robotics, and AI safety by exploring mechanisms through which intrinsic motivations for caregiving and cooperation may arise.
+
+\section{Thesis Organization}
+
+The remainder of this thesis is organized as follows.
+
+\textbf{Chapter 2} reviews relevant literature on maternal behavior in biology, the neurobiological mechanisms underlying caregiving, evolutionary theories of altruism, and computational models of cooperation. This chapter establishes the theoretical foundation for the proposed framework.
+
+\textbf{Chapter 3} describes the research methodology, including the maternal agent architecture, internal physiological state modeling, motivational decision mechanisms, evolutionary simulation design, and the mapping of biological principles to computational parameters.
+
+\textbf{Chapter 4} presents the experimental results and analyses, examining how different environmental pressures influence the emergence and stability of maternal caregiving strategies in artificial agents.
+
+\textbf{Chapter 5} concludes the thesis by summarizing the main findings, discussing their implications for biologically inspired artificial intelligence and AI safety, and outlining directions for future research.

@@ -61,6 +61,11 @@ Multi-stage (one panel per stage in each figure, plus a per-init line summary):
       --stage-root emergent=StageRollouts_normal/emergent \\
       --out-dir StageRollouts_normal/figures_conditional \\
       --extended
+
+  # Only Forage|hungry, Care|cold, Protect|injured + mean hunger/warmth/injury — trajectories:
+  python3 plot_runlog_conditional_behavior.py \\
+      --stage-root initial=... --stage-root transient=... --stage-root emergent=... \\
+      --preset child_state_paired --trajectory-only --out-dir figures_paired_trajectories
 """
 
 from __future__ import annotations
@@ -134,6 +139,17 @@ CORE_METRICS: list[tuple[str, str]] = [
 ]
 
 MOTIVATIONS = ("Forage", "Care", "Self", "Protect")
+
+# Subset for Exp 3: motivation|child-state pairings + mean child physiology (trajectory figures).
+CHILD_STATE_PAIRED_METRICS: list[tuple[str, str]] = [
+    ("P_sel_Forage_given_child_hungry", "P(Forage | child hungry)"),
+    ("P_sel_Care_given_child_cold", "P(Care | child cold, c0_warmth < τ)"),
+    ("P_sel_Protect_given_child_injured", "P(Protect | child injured)"),
+    ("hunger_mean_alive", "mean c0_hunger (alive ticks)"),
+    ("warmth_mean_alive", "mean c0_warmth (alive ticks)"),
+    ("injury_mean_alive", "mean c0_injury (alive ticks)"),
+]
+CHILD_STATE_PAIRED_KEYS = {k for k, _ in CHILD_STATE_PAIRED_METRICS}
 
 
 def _alive_mask(df: "pd.DataFrame") -> np.ndarray:
@@ -219,6 +235,7 @@ def _load_one_run(
     out["n_fear_alive_ticks"] = n_f
 
     out["closeness_mean_alive"] = float(np.nanmean(closeness[alive])) if n_alive else float("nan")
+    out["hunger_mean_alive"] = float(np.nanmean(hunger[alive])) if n_alive else float("nan")
     out["injury_mean_alive"] = float(np.nanmean(injury[alive])) if n_alive else float("nan")
     out["fear_mean_alive"] = float(np.nanmean(fear[alive])) if n_alive else float("nan")
 
@@ -324,6 +341,31 @@ def _metrics_for_plot(extended: bool) -> list[tuple[str, str]]:
     out = list(CORE_METRICS)
     if extended:
         out.extend(_extended_metric_list())
+    return out
+
+
+def _filter_metrics(
+    metrics: list[tuple[str, str]],
+    *,
+    only_keys: set[str] | None,
+    preset: str | None,
+) -> list[tuple[str, str]]:
+    if preset == "child_state_paired":
+        return list(CHILD_STATE_PAIRED_METRICS)
+    if not only_keys:
+        return metrics
+    by_key = {k: lab for k, lab in metrics}
+    missing = sorted(only_keys - set(by_key.keys()))
+    if missing:
+        print(
+            "[warn] unknown or unavailable --metrics keys (need --extended for P_sel_*):",
+            ", ".join(missing),
+            file=sys.stderr,
+        )
+    out: list[tuple[str, str]] = []
+    for k in only_keys:
+        if k in by_key:
+            out.append((k, by_key[k]))
     return out
 
 
@@ -513,6 +555,23 @@ def main() -> int:
         default=DEFAULT_STRESS_HIGH_TAU,
         help="Mother high stress: m0_stress > this (0–100). Lower if this mask is too rare.",
     )
+    ap.add_argument(
+        "--metrics",
+        default=None,
+        help="Comma-separated metric column names to plot only (e.g. P_sel_Forage_given_child_hungry,warmth_mean_alive). "
+        "Implies --extended if any P_sel_* key is listed.",
+    )
+    ap.add_argument(
+        "--preset",
+        choices=("child_state_paired",),
+        default=None,
+        help="Plot a fixed small set: Forage|hungry, Care|cold, Protect|injured + mean hunger/warmth/injury.",
+    )
+    ap.add_argument(
+        "--trajectory-only",
+        action="store_true",
+        help="With --stage-root: write only *_trajectory.png (skip per-stage boxplots).",
+    )
     args = ap.parse_args()
 
     if not args.root and not args.stage_root:
@@ -520,30 +579,43 @@ def main() -> int:
         return 2
 
     prefix = (args.title_prefix + " — ") if args.title_prefix else ""
-    metrics_to_plot = _metrics_for_plot(args.extended)
+    only_keys: set[str] | None = None
+    if args.metrics:
+        only_keys = {k.strip() for k in str(args.metrics).split(",") if k.strip()}
+    need_extended = bool(args.extended) or bool(args.preset == "child_state_paired") or bool(
+        only_keys and any(k.startswith("P_sel_") for k in only_keys)
+    )
+    metrics_to_plot = _filter_metrics(
+        _metrics_for_plot(need_extended),
+        only_keys=only_keys,
+        preset=args.preset,
+    )
+    if not metrics_to_plot:
+        print("[error] no metrics selected (--metrics / --preset)", file=sys.stderr)
+        return 2
     core_keys = {k for k, _ in CORE_METRICS}
 
     load_kw = dict(
         hunger_tau=args.hunger_tau,
         fear_tau=args.fear_tau,
-        extended=args.extended,
+        extended=need_extended,
         warmth_cold_tau=args.warmth_cold_tau,
         injury_tau=args.injury_tau,
         energy_low_tau=args.energy_low_tau,
         stress_high_tau=args.stress_high_tau,
     )
 
-    if args.root:
+    if args.root and not args.trajectory_only:
         root = os.path.abspath(args.root)
         out_dir = os.path.abspath(args.out_dir) if args.out_dir else os.path.join(root, "figures_conditional")
         os.makedirs(out_dir, exist_ok=True)
-        ext_dir = os.path.join(out_dir, args.extended_subdir) if args.extended else None
+        ext_dir = os.path.join(out_dir, args.extended_subdir) if need_extended else None
         if ext_dir:
             os.makedirs(ext_dir, exist_ok=True)
         df = _collect_root(root, **load_kw)
         df.to_csv(os.path.join(out_dir, "conditional_metrics_single.csv"), index=False)
         for key, label in metrics_to_plot:
-            dest = ext_dir if args.extended and key not in core_keys else out_dir
+            dest = ext_dir if need_extended and key not in core_keys else out_dir
             _plot_metric_box_panels(
                 df,
                 value_col=key,
@@ -566,7 +638,7 @@ def main() -> int:
         any_path = next(iter(stages.values()))
         out_dir = os.path.abspath(args.out_dir) if args.out_dir else os.path.join(os.path.dirname(any_path), "figures_conditional_stages")
         os.makedirs(out_dir, exist_ok=True)
-        ext_dir = os.path.join(out_dir, args.extended_subdir) if args.extended else None
+        ext_dir = os.path.join(out_dir, args.extended_subdir) if need_extended else None
         if ext_dir:
             os.makedirs(ext_dir, exist_ok=True)
 
@@ -577,20 +649,24 @@ def main() -> int:
             df.to_csv(os.path.join(out_dir, f"conditional_metrics_{label}.csv"), index=False)
 
         # Per-stage boxplots (one figure per metric per stage)
-        for label, df in stage_dfs.items():
-            for key, ml in metrics_to_plot:
-                dest = ext_dir if args.extended and key not in core_keys else out_dir
-                _plot_metric_box_panels(
-                    df,
-                    value_col=key,
-                    ylabel=ml,
-                    title=f"{prefix}{ml} — {label}",
-                    out_png=os.path.join(dest, f"cond_{key}_box_{label}.png"),
-                )
+        if not args.trajectory_only:
+            for label, df in stage_dfs.items():
+                for key, ml in metrics_to_plot:
+                    dest = ext_dir if need_extended and key not in core_keys else out_dir
+                    _plot_metric_box_panels(
+                        df,
+                        value_col=key,
+                        ylabel=ml,
+                        title=f"{prefix}{ml} — {label}",
+                        out_png=os.path.join(dest, f"cond_{key}_box_{label}.png"),
+                    )
 
         # Stage trajectories (one figure per metric)
         for key, ml in metrics_to_plot:
-            dest = ext_dir if args.extended and key not in core_keys else out_dir
+            if args.preset == "child_state_paired":
+                dest = out_dir
+            else:
+                dest = ext_dir if need_extended and key not in core_keys else out_dir
             _plot_stage_trajectories(
                 stage_dfs,
                 value_col=key,
@@ -599,6 +675,7 @@ def main() -> int:
                 out_png=os.path.join(dest, f"cond_{key}_trajectory.png"),
                 stage_order=stage_order,
             )
+        print(f"[ok] wrote {len(metrics_to_plot)} trajectory figure(s) under {out_dir}")
 
     return 0
 

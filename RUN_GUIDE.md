@@ -21,7 +21,7 @@ Constants used everywhere:
 
 | Parameter | Value | Notes |
 |---|---|---|
-| `--generations` | 5000 | full evolutionary run |
+| `--generations` | 3000 | full evolutionary run |
 | `--episodes` | 10 | seeds per fitness evaluation |
 | `--max-ticks` | 1000 | per episode |
 | `--grid-w / --grid-h` | 15 / 15 | representative grid |
@@ -75,12 +75,13 @@ filename collisions.
 
 ### Batch 1 — Emergence × E2 (no plasticity)
 
+run with 5 seed (47 48 49 50 51) this will be later
 ```bash
 for init in anti_maternal random_uniform pro_maternal; do
-  for s in 42 43 44 45 46 47 48 49 50 51; do
+  for s in 42 43 44 45 46; do
     tag="E2_${init}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats 1 \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child 0.5 \
@@ -97,10 +98,10 @@ done
 
 ```bash
 for init in anti_maternal random_uniform pro_maternal; do
-  for s in 42 43 44 45 46 47 48 49 50 51; do
+  for s in 42 43 44 45 46; do
     tag="P1_${init}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats 1 \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child 0.5 \
@@ -117,10 +118,10 @@ done
 
 ```bash
 for init in anti_maternal random_uniform pro_maternal; do
-  for s in 42 43 44 45 46 47 48 49 50 51; do
+  for s in 42 43 44 45 46; do
     tag="P2_${init}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats 1 \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child 0.5 \
@@ -148,7 +149,7 @@ for a in 0.3 0.5 0.7; do
   for s in 42 43 44 45 46; do
     tag="E2_thr${THR}_g15_i15_a${atag}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats $THR \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child $a \
@@ -169,7 +170,7 @@ for a in 0.3 0.5 0.7; do
   for s in 42 43 44 45 46; do
     tag="E2_thr${THR}_g15_i15_a${atag}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats $THR \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child $a \
@@ -190,7 +191,7 @@ for a in 0.3 0.5 0.7; do
   for s in 42 43 44 45 46; do
     tag="E2_thr${THR}_g15_i15_a${atag}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats $THR \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child $a \
@@ -215,7 +216,7 @@ for a in 0.3 0.5 0.7; do
   for s in 42 43 44 45 46; do
     tag="P1_thr${THR}_g15_i15_a${atag}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats $THR \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child $a \
@@ -236,7 +237,7 @@ for a in 0.3 0.5 0.7; do
   for s in 42 43 44 45 46; do
     tag="P1_thr${THR}_g15_i15_a${atag}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats $THR \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child $a \
@@ -257,7 +258,7 @@ for a in 0.3 0.5 0.7; do
   for s in 42 43 44 45 46; do
     tag="P1_thr${THR}_g15_i15_a${atag}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats $THR \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child $a \
@@ -282,7 +283,7 @@ for a in 0.3 0.5 0.7; do
   for s in 42 43 44 45 46; do
     tag="P2_thr${THR}_g15_i15_a${atag}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats $THR \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child $a \
@@ -303,7 +304,7 @@ for a in 0.3 0.5 0.7; do
   for s in 42 43 44 45 46; do
     tag="P2_thr${THR}_g15_i15_a${atag}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats $THR \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child $a \
@@ -324,7 +325,7 @@ for a in 0.3 0.5 0.7; do
   for s in 42 43 44 45 46; do
     tag="P2_thr${THR}_g15_i15_a${atag}_seed${s}"
     python3 run_evolve_lineage.py \
-        --generations 5000 --episodes 10 --max-ticks 1000 \
+        --generations 3000 --episodes 10 --max-ticks 1000 \
         --grid-w 15 --grid-h 15 --threats $THR \
         --food-spawn-interval 15 --food-spawn-n 1 \
         --fitness-mode ttd_overall --alpha-child $a \
@@ -354,7 +355,7 @@ time python3 run_evolve_lineage.py \
     --output-dir /tmp/rt_test
 ```
 
-Multiply the wall-clock by **50** (5000 generations / 100) to estimate one full run.
+Multiply the wall-clock by **50** (3000 generations / 100) to estimate one full run.
 Multiply that by the batch size (30 for emergence batches, 15 for sweep batches) to estimate
 total wall-clock per batch.
 
@@ -449,7 +450,7 @@ from any P1 emergence run and evaluate them with **plasticity disabled**:
 SEED=42
 RUN_DIR="Emergence_results/normal/P1_anti_maternal_seed${SEED}"
 
-for g in 1000 2500 5000; do
+for g in 1000 2500 3000; do
   for w in easy normal hard; do
     case $w in
       easy)   thr=0 ;;
@@ -623,8 +624,8 @@ clobber data — delete the file by hand if you really do want to start over.
 You can also point `--resume` at a finished run and bump `--generations`:
 
 ```bash
-# Was 3000 generations - extend to 5000:
-python run_evolve_lineage.py --generations 5000 ... --output-dir <dir> --resume
+# Was 3000 generations - extend to 3000:
+python run_evolve_lineage.py --generations 3000 ... --output-dir <dir> --resume
 ```
 
 The runner detects that the saved `last_completed_gen` already exceeds the *old* target

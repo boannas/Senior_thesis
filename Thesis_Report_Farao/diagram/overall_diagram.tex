@@ -1,0 +1,248 @@
+
+\begin{figure}[H]
+    \centering
+    
+    %% Outer box wrapping both panels
+    \setlength{\fboxsep}{3pt}
+    % Constrain total height so it always fits on page.
+    % Leave room for caption + surrounding text: keep diagram well below page height.
+    \begin{adjustbox}{max width=\linewidth, max totalheight=0.62\textheight, center}
+    \fbox{%
+    \begin{minipage}{\dimexpr\linewidth-2\fboxsep-2\fboxrule\relax}
+    \centering
+    
+    % %% Sub-labels row (use \linewidth inside nested minipage)
+    \begin{minipage}[t]{0.73\linewidth}
+      \centering\footnotesize\textbf{(Left) Internal-State Pipeline}
+    \end{minipage}%
+    \hspace{0.015\linewidth}%
+    {\color{gray!70}\vrule width 0.5pt}%
+    \hspace{0.015\linewidth}%
+    \begin{minipage}[t]{0.23\linewidth}
+      \centering\footnotesize\textbf{(Right) Grid Scenarios}
+    \end{minipage}
+    
+    \vspace{4pt}
+    
+    %% ---------- Left: mechanism ----------
+    % Use [t] + \vspace{0pt} so left/right blocks top-align.
+    \begin{minipage}[t]{0.73\linewidth}
+    \vspace{0pt}\centering
+    % Nudge the pipeline down slightly for visual balance
+    \vspace{3mm}
+    \resizebox{\linewidth}{!}{%
+    \begin{tikzpicture}
+      \tikzset{
+        blk/.style={draw, rounded corners=4pt, align=center,
+                    font=\small\sffamily, minimum height=0.9cm, inner sep=7pt},
+        envbox/.style  ={blk, fill=blue!10,   minimum width=2.6cm},
+        childbox/.style={blk, fill=orange!18, minimum width=3.2cm},
+        physbox/.style ={blk, fill=green!14,  minimum width=4.8cm},
+        hormbox/.style ={blk, fill=violet!14, minimum width=4.8cm},
+        psychbox/.style={blk, fill=yellow!25, minimum width=4.8cm},
+        motivbox/.style={blk, fill=red!12,    minimum width=4.8cm},
+        actbox/.style  ={blk, fill=cyan!15,   minimum width=4.8cm},
+        fw/.style ={-{Stealth}, thick, black},
+        fb/.style ={-{Stealth}, thick, dashed, gray!65},
+        atk/.style={-{Stealth}, thick, dashed, red!65!black},
+        lbl/.style={font=\footnotesize\sffamily, fill=white,
+                    inner sep=2pt, rounded corners=2pt},
+      }
+
+      % Tighten bounding box (reduce empty whitespace so the diagram scales larger)
+      % Use a slightly generous box to avoid clipping content.
+      \useasboundingbox (-3.8,-1.9) rectangle (12.8,9.2);
+    
+      \node[envbox] (food)   at (-1.5, 7.8)
+        {Food Items\\[-2pt]{\footnotesize periodic spawn}};
+      \node[envbox] (threat) at ( 10, 5.5)
+        {Threat Agents\\[-2pt]{\footnotesize patrol\,/\,chase\,/\,flee}};
+      \node[childbox] (child) at (-1.5, 3.5)
+        {\textbf{Child States}\\[3pt]{\footnotesize$H_C$\quad$W_C$\quad$I_C$}};
+    
+      \node[physbox]  (physio) at (4.0, 7.5)
+        {\textbf{Physiology}\\[3pt]
+         {\footnotesize$E_M$\,(energy)\quad$\Phi_M$\,(fatigue)}};
+      \node[hormbox]  (horm)   at (4.0, 5.5)
+        {\textbf{Hormones}\\[3pt]
+         {\footnotesize Oxytocin\,$OT$\quad Cortisol\,$CORT$}};
+      \node[psychbox] (psych)  at (4.0, 3.5)
+        {\textbf{Psychology}\\[3pt]
+         {\footnotesize Closeness\enspace Fear\enspace Bonding\enspace Stress}};
+      \node[motivbox] (motiv)  at (4.0, 1.5)
+        {\textbf{Motivations}\enspace($\arg\!\max$)\\[3pt]
+         {\footnotesize Forage\enspace Care\enspace Protect\enspace Self}};
+      \node[actbox]   (act)    at (4.0, -.5)
+        {\textbf{Action Policy}\\[3pt]
+         {\footnotesize\texttt{eat}\enspace\texttt{feed\_child}\enspace
+          \texttt{care}\enspace\texttt{rest}\enspace\texttt{stay}}};
+    
+      \begin{scope}[on background layer]
+        \node[draw=gray!75, dashed, rounded corners=8pt, fill=gray!7,
+              inner sep=12pt, fit=(physio)(horm)(psych)(motiv)(act),
+              label={[font=\small\bfseries\sffamily,
+                      text=gray!100]above:\textbf{Mother Agent}}] {};
+      \end{scope}
+    
+      \draw[fw] (physio)--(horm); \draw[fw] (horm)--(psych);
+      \draw[fw] (psych)--(motiv); \draw[fw] (motiv)--(act);
+    
+      % Labels: avoid 'sloped' so they don't drift when resized
+      \draw[fw] (food.east) to[out=0,in=145]
+        node[lbl,pos=0.55, yshift=2pt]{food visible} (physio.north west);
+      \draw[fw] (threat.west) --
+        node[lbl,midway, yshift=2pt]{$p(t)\!\to\!CORT$} (horm.east);
+      \draw[fw] (threat.south) to[out=250,in=10]
+        node[lbl,pos=0.70, yshift=-2pt]{$p(t)\!\to\!Fear$} (psych.east);
+      \draw[fw] (child.north) to[out=60,in=180]
+        node[lbl,pos=0.55, yshift=2pt]{child needs} (horm.west);
+      \draw[fw] (child.east) to[out=0,in=180]
+        node[lbl,pos=0.55, yshift=2pt]{closeness} (psych.west);
+      \draw[atk] (threat) to[out=210,in=30]
+        node[lbl,pos=0.70, yshift=-2pt, text=red!65!black]
+        {attack:\,$I_C{+}4$/tick} (child);
+      \draw[fb] (act.east) .. controls ++(2.4,0) and ++(2.4,0) ..
+        node[lbl,right=2,align=left,text=gray!70!black,pos=0.4]
+        {\texttt{eat}:\,$E_M{+}10$\\[2pt]\texttt{rest}:\,$\Phi_M{-}4$}
+        (physio.east);
+      \draw[fb] (act.west) to[out=200,in=255]
+        node[lbl,left=8,align=right,text=gray!70!black]
+        {\texttt{care}:\,$W_C{+}5$\\[2pt]\texttt{feed}:\,$H_C{-}10$}
+        (child.south);
+    \end{tikzpicture}%
+    }
+    \end{minipage}%
+    \hspace{0.015\linewidth}%
+    {\color{gray!70}\vrule width 0.5pt}%
+    \hspace{0.015\linewidth}%
+    %% ---------- Right: scenarios (stacked) ----------
+    \begin{minipage}[t]{0.23\linewidth}
+    \vspace{0pt}\centering
+    \resizebox{\linewidth}{!}{%
+    \begin{tikzpicture}
+    
+    % Patrol
+    \begin{scope}[shift={(0,18.5)}]
+      \draw[thin] (0,0) rectangle (10.5,7.5);
+      \draw[step=1.5cm,gray!50, thick] (0,0) grid (10.5,7.5);
+      \node[font=\Huge\bfseries] at (5.4,8.1) {(a) Threat - Patrol};
+      \node[circle,draw=blue!70,fill=blue!30,thick,
+            minimum size=1.2cm,font=\LARGE\bfseries] (C1) at (2.25,5.25) {C};
+      \node[circle,draw=red!70,fill=red!30,thick,
+            minimum size=1.0cm,font=\LARGE\bfseries] (M1) at (8.25,0.75) {M};
+      \node[regular polygon,regular polygon sides=3,
+            draw=black!70,fill=gray!40,thick,
+            minimum size=1.3cm,font=\LARGE\bfseries] (T1) at (8.25,5.1) {T};
+            
+      \node[rectangle,draw=green!70,fill=green!30,thick,
+            minimum size=0.8cm,font=\LARGE\bfseries] at (2.25,2.25) {F};
+      \node[rectangle,draw=green!70,fill=green!30,thick,
+            minimum size=0.8cm,font=\LARGE\bfseries] at (9.75,5.25) {F};
+      \node[rectangle,draw=green!70,fill=green!30,thick,
+            minimum size=0.8cm,font=\LARGE\bfseries] at (5.25,0.75) {F};
+            
+      \fill[blue!20,opacity=0.2] (C1) circle (1.6cm);
+      \draw[densely dotted,blue!50,line width=1pt] (C1) circle (1.6cm);
+      \fill[gray!30,opacity=0.2] (T1) circle (1.6cm);
+      \draw[densely dotted,gray!60,line width=1pt] (T1) circle (1.6cm);
+      \coordinate (P1) at (3.8,5.25);
+      
+      \draw[dashed,gray!80,line width=2pt,->,>=stealth]
+        (T1) -- ($(T1)!0.95!(P1)$);
+      \draw[gray!100,line width=2pt]
+        ($(P1)+(-0.15,-0.15)$) -- ($(P1)+(0.15,0.15)$);
+      \draw[gray!100,line width=2pt]
+        ($(P1)+(-0.15,0.15)$) -- ($(P1)+(0.15,-0.15)$);
+    \end{scope}
+    
+    
+    % Protect
+    \begin{scope}[shift={(0,9.5)}]
+      \draw[thin] (0,0) rectangle (10.5,7.5);
+      \draw[step=1.5cm,gray!50,thick] (0,0) grid (10.5,7.5);
+      \fill[blue!20,opacity=0.2] (2.25,5.25) circle (1.6cm);
+    \draw[densely dotted,blue!50,thick] (2.25,5.25) circle (1.6cm);
+    
+    \fill[gray!30,opacity=0.2] (3.8,5.25) circle (1.6cm);
+    \draw[densely dotted,gray!70,thick] (3.8,5.25) circle (1.6cm);
+      \node[font=\Huge\bfseries] at (5.4,8.1) {(b) Mother - Protect};
+      \node[circle,draw=blue!70,fill=blue!30,thick,
+            minimum size=1.2cm,font=\LARGE\bfseries] (C2) at (2.25,5.25) {C};
+      \node[circle,draw=red!70,fill=red!30,thick,
+            minimum size=1.0cm,font=\LARGE\bfseries] (M2) at (8.25,0.75) {M};
+      \node[regular polygon,regular polygon sides=3,
+            draw=black!70,fill=gray!40,thick,
+            minimum size=1.3cm,font=\LARGE\bfseries] (T2) at (3.8,5.25) {T};
+      \node[rectangle,draw=green!70,fill=green!30,thick,
+            minimum size=0.8cm,font=\LARGE\bfseries] at (2.25,2.25) {F};
+      \node[rectangle,draw=green!70,fill=green!30,thick,
+            minimum size=0.8cm,font=\LARGE\bfseries] at (9.75,5.25) {F};
+      \node[rectangle,draw=green!70,fill=green!30,thick,
+            minimum size=0.8cm,font=\LARGE\bfseries] at (5.25,0.75) {F};
+      % \draw[dashed,gray!80,->] (T2) -- (M2);
+      \draw[->,thick,purple!75,line width=2pt] (M2) -- (C2);
+      % \draw[dotted,thick,red!75,line width=1.5pt] (M2) -- (T2);
+    \end{scope}
+    
+    % Flee
+    \begin{scope}[shift={(0,0)}]
+      \draw[thin] (0,0) rectangle (10.5,7.5);
+      \draw[step=1.5cm,gray!59,thick] (0,0) grid (10.5,7.5);
+      \fill[blue!20,opacity=0.2] (2.25,5.25) circle (1.6cm);
+    \draw[densely dotted,blue!50,thick] (2.25,5.25) circle (1.6cm);
+    
+    \fill[gray!30,opacity=0.2] (3.8,5.25) circle (1.6cm);
+    \draw[densely dotted,gray!70,thick] (3.8,5.25) circle (1.6cm);
+      \node[font=\Huge\bfseries] at (5.4,8.1) {(c) Threat - Flee};
+      \node[circle,draw=blue!70,fill=blue!30,thick,
+            minimum size=1.2cm,font=\LARGE\bfseries] (C3) at (2.25,5.25) {C};
+      \node[circle,draw=red!70,fill=red!30,thick,
+            minimum size=1.0cm,font=\LARGE\bfseries] (M3) at (3.75,3.75) {M};
+      \node[regular polygon,regular polygon sides=3,
+            draw=black!70,fill=gray!40,thick,
+            minimum size=1.3cm,font=\LARGE\bfseries] (T3) at (3.8,5.25) {T};
+      \node[rectangle,draw=green!70,fill=green!30,thick,
+            minimum size=0.8cm,font=\LARGE\bfseries] at (2.25,2.25) {F};
+      \node[rectangle,draw=green!70,fill=green!30,thick,
+            minimum size=0.8cm,font=\LARGE\bfseries] at (9.75,5.25) {F};
+      \node[rectangle,draw=green!70,fill=green!30,thick,
+            minimum size=0.8cm,font=\LARGE\bfseries] at (5.25,0.75) {F};
+      \coordinate (F3) at (9.75,6.75);
+      \draw[dash dot,black!80,line width=1.5pt,->,>=stealth]
+        (T3) -- ($(T3)!0.95!(F3)$);
+      \draw[black!100,line width=2pt]
+        ($(F3)+(-0.15,-0.15)$) -- ($(F3)+(0.15,0.15)$);
+      \draw[black!100,line width=2pt]
+        ($(F3)+(-0.15,0.15)$) -- ($(F3)+(0.15,-0.15)$);
+        \draw[->,thick,purple!75,line width=1.5pt] (M3) -- (C3);
+    \end{scope}
+    
+    \end{tikzpicture}%
+    }
+    \end{minipage}
+    
+    \end{minipage}%
+    }% end \fbox
+    \end{adjustbox}
+    
+    
+    \vspace{-2mm}
+    \caption{\small
+    \textbf{Left:} Internal-state pipeline of the mother agent. Solid arrows indicate
+    state/perceptual signals, dashed gray arrows indicate action feedback, and dashed
+    red arrows indicate threat-induced child injury.
+    \textbf{Right:} Illustrative grid-world scenarios:
+    \textbf{(a)} threat patrol,
+    \textbf{(b)} mother protective approach,
+    \textbf{(c)} threat flee.
+    In the grid panels, arrows indicate movement direction rather than internal
+    signals.
+    \textbf{C}~=~child,
+    \textbf{M}~=~mother,
+    \textbf{T}~=~threat,
+    \textbf{F}~=~food.}
+    
+    
+    \label{fig:overview}
+    \end{figure}
+ 

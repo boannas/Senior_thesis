@@ -1,0 +1,378 @@
+\newpage
+
+\chapter{Literature Review}
+\noindent
+Maternal care behavior exhibits remarkable diversity across species, ranging from exclusive care for genetic offspring (kin selection) to cooperative breeding where multiple adults raise young collectively (alloparental care) to competitive territoriality where mothers defend resources aggressively. These strategies emerge from the interaction of genetic predispositions, hormonal modulation, neural decision circuits, and environmental pressures operating across evolutionary timescales. Understanding which biological mechanisms and ecological conditions favor each strategy has implications for both evolutionary biology and artificial intelligence.
+
+\paragraph{Scope note (alignment with this thesis).}
+The implementation studied in this thesis focuses on a minimal dyadic setting: a single mother--child pair in a grid-world with food resources and optional threats. The model does \emph{not} implement kin recognition, multi-family cooperative breeding, or explicit alloparental care. We review these richer biological strategies to motivate the design space and to justify future extensions (e.g., kinship, multiple families, asynchronous worlds), while the present experiments test whether caregiving can emerge from internal regulation and evolutionary selection in the simplest setting where it is measurable.
+
+\paragraph{Positioning relative to reward shaping and reinforcement learning.}
+Many computational approaches to prosocial agents rely on externally specified objectives: reward shaping, social reward terms, or constraints that directly encode the desired cooperative outcome. In contrast, the approach in this thesis emphasizes \emph{internal motivation} as the driver of behavior: actions are selected via competition among biologically inspired drives (Forage, Care, Self, Protect) computed from physiological and hormone-like state variables. Adaptation occurs by adjusting how strongly internal signals influence these motivations, through lifetime plasticity and evolutionary selection on inherited motivation weights. This framing aims to produce caregiving as an emergent strategy under selection pressure rather than as a behavior explicitly optimized by a hand-designed reward function.
+
+In biological systems, maternal behavior is supported by neuro-hormonal mechanisms such as oxytocin and prolactin, and by neural circuits including the hypothalamus, amygdala, and prefrontal regions. In our computational abstraction, we model a subset of these mechanisms: oxytocin-like and cortisol-like modulators, combined with physiological and psychological state variables, drive motivational competition among Forage, Care, Self, and Protect behaviors.
+
+
+% ===== Maternal Behavior =====
+\section{Maternal Behavior Strategies in Nature}
+        
+        \subsubsection{Mechanisms of Kin Recognition}
+        Accurate kin recognition is fundamental for kin‐selective maternal behaviour, as it ensures that costly care is directed toward genetically related offspring who provide inclusive-fitness returns. Across taxa, several complementary mechanisms have evolved to achieve this discrimination.
+
+        \paragraph{Relevance to this thesis.}
+        In the current simulation, mothers are assigned a single child and effectively have perfect identification of that child; kin recognition errors and decisions between multiple offspring are not modeled. We include kin-recognition mechanisms here as biological grounding and as a clear direction for future multi-family extensions.
+
+        \textbf{Olfactory and chemical cues.}  In many mammals, olfactory signals are the primary substrate for kin recognition.  Major histocompatibility complex (MHC)–linked odour cues allow individuals to assess relatedness through scent, as demonstrated in mice, primates, and humans.  Mothers can identify their own offspring within minutes of birth through a combination of amniotic and individual odour signatures, thereby preventing mis-directed care and infanticide.
+
+        \textbf{Neural and hormonal modulation.}  Neural circuits in the hypothalamus, amygdala, and medial preoptic area integrate sensory information with hormonal states to bias maternal responses toward familiar kin.  Oxytocin and prolactin act as neuromodulators enhancing affiliative and protective behaviours once kin are recognized.  In rodents, lesions in these circuits disrupt selective nursing, while oxytocin administration reinstates kin discrimination.
+        
+        \textbf{Social and spatial heuristics.}  When direct recognition is unreliable, many species rely on contextual cues such as nest location, co-rearing, or association history.  Familiarity and shared developmental environment act as low-cost heuristics for kinship.  In social species such as primates or elephants, social bonding and grooming networks also reflect underlying kin structure, maintaining cooperative alliances among maternal relatives.
+        
+        Together, these mechanisms illustrate how kin recognition is not a single sensory process but a multi-layered integration of olfactory, neural, and social information supporting inclusive maternal strategies.
+
+
+        % \subsubsection{Examples of Strict Kin-Selectivity}
+        % Empirical evidence strongly supports kin selection as a driver of maternal decision making.  A particularly clear case occurs in wild red squirrels (\textit{Tamiasciurus hudsonicus}), where females adopt orphaned pups only when they are sufficiently related; the decision threshold matches Hamilton’s inequality, such that the inclusive-fitness benefits of adoption outweigh the costs of rearing additional young \cite{gorrell2010}.  Similarly, in cooperative breeding birds and mammals, helpers preferentially provision close relatives, increasing the survival of kin while maintaining their own indirect fitness.
+
+        % In the eusocial Hymenoptera (ants, bees, and wasps), maternal investment by queens and workers is shaped by haplodiploid relatedness asymmetries.  Workers are more related to sisters ($r=0.75$) than to brothers ($r=0.25$), leading to female-biased brood care and sex-allocation patterns that match inclusive-fitness predictions.  These systems provide some of the strongest quantitative confirmations of Hamilton’s rule in nature.
+
+        \subsubsection{Adaptive Context}
+        Kin-selective maternal care evolves within a broader adaptive landscape shaped by ecological constraints and genetic conflicts.  While caring for kin can enhance inclusive fitness, it often entails opportunity costs—time, energy, and risk—that can reduce a mother’s residual reproductive value.  Parent–offspring conflict theory predicts that offspring demand more investment than mothers are selected to give, leading to negotiation dynamics observable in feeding rates and weaning resistance \cite{kol liker2015}.  Furthermore, local resource competition among relatives can offset the benefits of helping, producing evolutionary equilibria where cooperation and competition coexist.  
+
+        At the genomic level, imprinting mechanisms can mediate these conflicts.  Paternally expressed alleles may favor increased maternal provisioning, while maternally expressed alleles counteract over-exploitation, producing a molecular record of evolutionary negotiation \cite{haig2014}.  Thus, kin selection interacts with ecological and genetic pressures to produce the observed diversity of maternal strategies across species.
+
+        % \subsubsection{Connection to Computational Models}
+        % The principles of kin selection and recognition offer a natural bridge to computational modeling.  In agent-based or reinforcement-learning simulations, the Hamiltonian condition
+        % \begin{equation}
+        % r\,b - c > 0
+        % \end{equation}
+        % can be implemented as a decision rule governing whether an agent invests in another’s welfare.  The parameter $r$ may represent genetic similarity, social closeness, or learned familiarity, while $b$ and $c$ encode the payoff structure of cooperative acts.  By adjusting these parameters, one can explore the conditions under which altruistic or maternal behaviours emerge spontaneously.
+
+        % Mechanistic models can further incorporate recognition noise, hormonal thresholds, or neural activation functions that modulate caregiving probability.  For instance, olfactory matching can be represented by similarity metrics in a feature space, and oxytocin-like modulation by dynamic weighting of prosocial policies.  Such computational analogues help unify evolutionary theory with neurobiological realism, enabling the development of artificial agents capable of context-sensitive, kin-biased care—an essential step toward bio-inspired prosocial robotics and ``maternal-instinct'' AI systems \cite{fortune2025}.
+
+    
+
+    % --- Cooperative and Alloparental Care ---
+    \subsection{Cooperative Breeding and Alloparental Care}
+        \subsubsection{Defining Cooperative Breeding}
+        Cooperative breeding refers to a social system in which individuals beyond the genetic parents assist in the care and rearing of offspring \cite{cluttonbrock2002, cockburn2006}.  These helpers—often older siblings, kin, or occasionally unrelated individuals—contribute food, protection, and social support to developing young.  The system thus represents an evolutionary extension of maternal behaviour, redistributing parental effort across group members.  In birds, meerkats, and some primates, cooperative breeding has been shown to enhance offspring survival under conditions of environmental uncertainty or high predation risk.  
+
+        From an evolutionary standpoint, cooperative breeding can arise through multiple pathways.  When helpers are related to the offspring, their participation may be explained by kin selection; when unrelated, mutualism, reciprocity, or group-level benefits may provide the fitness incentives \cite{griffe2003}.  Consequently, cooperative breeding is often viewed as a bridge between kin-biased maternal care and generalized prosocial behaviour.
+
+        % \subsubsection{Case Study: Meerkats and Other Cooperative Vertebrates}
+        % A well-studied example occurs in the meerkat (\textit{Suricata suricatta}), where subordinate females and males assist dominant breeders by provisioning pups, standing guard, and defending against predators.  Experimental removal of helpers reduces pup survival and growth, confirming their functional importance \cite{cluttonbrock2002, hodge2007}.  Kinship increases the likelihood and intensity of helping, but social cohesion and future reproductive prospects also modulate participation.  
+
+        % In some bird species, such as the Seychelles warbler (\textit{Acrocephalus sechellensis}), offspring remain in their natal territory as helpers when breeding opportunities are scarce, contributing to parental nests until ecological conditions improve \cite{komdeur1992}.  Similar systems have evolved independently in cichlid fishes, naked mole-rats, and several primate lineages, suggesting that cooperative breeding is a convergent solution to ecological and demographic constraints.
+
+        
+        \subsubsection{Environmental and Social Determinants}
+        Cooperative breeding tends to evolve under environmental conditions where the cost of independent breeding is high and the benefit of shared care is substantial. Key determinants include:
+        \begin{itemize}
+            \item \textbf{Habitat saturation:} Limited breeding sites or territories constrain dispersal and favour staying to help relatives.
+            \item \textbf{Predation pressure:} Group vigilance and collective defense increase offspring survival in dangerous environments.
+            \item \textbf{Resource unpredictability:} Variable food availability makes cooperative provisioning advantageous by buffering young against starvation.
+            \item \textbf{Social stability:} Long-term bonds and dominance hierarchies permit reliable cooperation among group members.
+        \end{itemize}
+        Physiologically, hormonal modulation (e.g., prolactin elevation) has been linked to the expression of helping behaviour, providing a proximate mechanism by which environmental cues trigger cooperative responses.
+
+        % \subsubsection{Connection to Computational Models}
+        % In computational and robotic contexts, cooperative breeding provides a biologically grounded template for modelling distributed caregiving and task sharing. Agent-based simulations can represent each helper as an agent evaluating whether to invest effort based on relatedness $r$, expected benefit $b$, and personal cost $c$, extending Hamilton’s rule to multi-agent systems:
+        % \begin{equation}
+        % r\,b_{\text{group}} - c_{\text{individual}} > 0.
+        % \end{equation}
+        % Dynamic resource environments can be modelled to test how ecological constraints influence cooperation emergence, mirroring habitat saturation or predation risk.
+        
+        % In reinforcement-learning or evolutionary-algorithm frameworks, cooperative breeding can be simulated through reward sharing or credit assignment among agents that jointly improve offspring (or task) success. Hormonal or motivational analogues—such as simulated oxytocin or prolactin parameters—can modulate willingness to help, capturing the interaction between internal state and social context. These models contribute to the design of collective robotic systems capable of adaptive caregiving, cooperative maintenance, or collective protection behaviours inspired by biological family systems.
+        
+    % --- Competitive and Territorial ---
+    \subsection{Competitive and Territorial Maternal Strategies}
+        \subsubsection{Aggression, infanticide and exclusive space}
+        While kin-selective and cooperative systems emphasise prosociality, many species exhibit maternal strategies shaped by competition rather than cooperation. Competitive maternal behaviour involves the active defense of territory, mates, or offspring and may include aggression toward conspecific females or even infanticide of unrelated young \cite{hrdy1979, stockley2011}. These strategies emerge when resources essential to reproduction—such as food, shelter, or male assistance—are limiting, making direct competition more profitable than sharing.
+
+        Among mammals, lactating females of species such as lions, langurs, and rodents have been observed to commit infanticide against rival offspring, thereby eliminating competitors for milk or social rank. In rodents, stress-induced suppression of lactation and nest defense behaviour are mediated by neural circuits in the amygdala and hypothalamus that are distinct from those governing affiliative care. Hormones such as progesterone, corticosterone, and testosterone interact with maternal circuits to switch behavioural priorities from caregiving to defense under conditions of threat or crowding.
+        
+        Territorial exclusivity further reinforces this competitive dimension: mothers that secure private nesting or denning areas reduce the risk of alloparental interference and predation.  In solitary carnivores such as leopards and bears, maternal range size and aggression levels correlate strongly with offspring survival and access to prey resources \cite{lukas2014}.  Thus, competitive maternal care can be adaptive when the ecological payoffs of exclusivity exceed the benefits of cooperation.
+
+        \subsubsection{Resource Competition and Dominance}
+        Dominance hierarchies modulate access to reproductive resources and shape patterns of maternal investment within social groups \cite{cluttonbrock2007, sapolsky2005, creel2001}.  In many primates, dominant females reproduce more frequently and experience higher infant survival, while subordinates may delay breeding or engage in covert infanticide.  Such rank-related asymmetries generate reproductive skew, a phenomenon explained by concession and suppression models in social evolution theory .
+
+        The neuroendocrine basis of dominance involves elevated basal glucocorticoid and androgen levels that enhance competitive motivation and vigilance \cite{creel2001}.  From an evolutionary perspective, maternal aggression and dominance can be interpreted as conditional strategies—activated by local resource competition and demographic density rather than fixed traits.  These strategies ensure that limited resources are preferentially channelled to the female’s own genetic lineage \cite{johnstone2000}.
+
+        % \subsubsection{Territoriality and Exclusive Space Use}
+        % \subsubsection{Infanticide and Counter-Strategies}
+        \subsubsection{Conditions Favoring Competitive Strategies}
+        Comparative analyses suggest that competitive or territorial maternal systems are favoured when \cite{emlen1977, lukas2018}:
+        \begin{itemize}
+            \item \textbf{Resources are clumped and defensible}, allowing individuals to exclude others profitably.
+            \item \textbf{Predation pressure is moderate}, so group defense offers limited advantage.
+            \item \textbf{Population density is high}, increasing direct competition among mothers for breeding sites.
+            \item \textbf{Relatedness among local females is low}, reducing the indirect‐fitness value of tolerance or cooperation.
+        \end{itemize}
+        Under these ecological and social circumstances, selection can favour aggressive maternal phenotypes, even at the cost of group cohesion.  The resulting behavioural diversity—ranging from cooperative breeders to infanticidal competitors—illustrates the adaptive flexibility of maternal care strategies \cite{stockley2011}.
+
+        % \subsubsection{Connection to Computational Models}
+        % Competitive maternal systems can be formalised in computational frameworks using evolutionary game theory and agent-based modelling \cite{maynardsmith1973, nowak2004}.  Here, agents represent mothers that choose between cooperative and competitive strategies according to payoff functions that balance resource gain, risk, and energetic cost.  A simplified payoff matrix can be defined as:
+        % \begin{equation}
+        % P_{\text{maternal}} =
+        % \begin{bmatrix}
+        % R & T \\
+        % S & P
+        % \end{bmatrix},
+        % \end{equation}
+        % where $R$ is the reward for mutual tolerance, $T$ the temptation payoff for successful aggression, $S$ the sucker’s loss when tolerant individuals are exploited, and $P$ the punishment cost of mutual conflict \cite{leibo2017, wang2018}.  Evolutionary stability analysis or reinforcement learning can then be applied to determine the frequency of competitive equilibria under varying resource densities and relatedness values .
+        
+        % At the neurocomputational level, aggression thresholds can be modelled as activation functions modulated by internal states (e.g., stress, hormonal levels) and external stimuli (e.g., crowding, threat).  These abstractions link biological aggression circuits to adaptive decision rules in artificial agents.  Implementing such mechanisms in bio-inspired robotics may allow autonomous systems to balance protection and cooperation-mirroring the dynamic trade-offs seen in natural maternal behaviour.
+
+    
+% ===== Biological Mechanisms =====
+\section{Biological Mechanisms of Maternal Behavior}
+Maternal care is underpinned by complex genetic, hormonal, and neural systems that have evolved to ensure offspring survival and optimize parental investment. While the behavioral strategies reviewed above describe how maternal care varies across ecological and social contexts, its expression ultimately depends on internal biological mechanisms that regulate perception, motivation, and decision-making. The following subsections summarize the key genetic, hormonal, and neurocircuit-level processes that mediate maternal behaviour across species.
+
+    \subsection{Genetic and Evolutionary Basis}
+        At the genetic level, maternal behaviour reflects both conserved and rapidly evolving components. Comparative genomics and quantitative trait analyses reveal that genes involved in social bonding, neuropeptide signalling, and stress regulation show strong signatures of selection in mammals \cite{dulac2014, galef2013}. Variants in genes coding for oxytocin (OXT), vasopressin (AVP), prolactin (PRL), and their receptors (OXTR, AVPR1a, PRLR) are associated with species differences in pair bonding, aggression, and parental care.
+
+        Epigenetic mechanisms provide an additional layer of maternal adaptation. Early-life maternal care alters offspring DNA methylation patterns in genes regulating glucocorticoid receptors and stress reactivity, producing transgenerational effects on caregiving propensity \cite{champagne2006, meaney2010}.  These findings suggest that maternal behaviour is both heritable and developmentally plastic—shaped by genetic architecture but modifiable through experience and environment.
+
+        From an evolutionary perspective, the genomic basis of care often reflects coadaptation between mothers and offspring.  Genomic imprinting—where alleles are expressed in a parent-of-origin–specific manner—illustrates intragenomic conflict over maternal resource allocation \cite{haig2014}.  Such imprinted loci (e.g., \textit{Igf2}, \textit{Peg3}) influence offspring growth and maternal nurturing intensity, linking molecular evolution to behavioural outcomes.
+
+    \subsection{Hormonal Modulation}
+
+        Hormonal systems coordinate the timing and intensity of maternal behaviours by coupling physiological state to environmental and social cues.  The neuropeptide oxytocin plays a central role in facilitating maternal bonding, milk ejection, and affiliative behaviour across mammals \cite{numan2006, bales2015}.  Its release during parturition and nursing enhances neural responsiveness to offspring cues in regions such as the amygdala and nucleus accumbens.
+        
+        Prolactin, produced by the anterior pituitary, promotes maternal motivation and nest-building, while estrogen and progesterone modulate the transition from pregnancy to postpartum caregiving.  Elevated estrogen increases oxytocin receptor expression, priming neural circuits for caregiving, whereas the postpartum decline in progesterone removes inhibitory control on maternal responsiveness \cite{rosenblatt1994}.  
+        
+        Corticosteroids and catecholamines further shape maternal vigilance and defensive behaviour under stress.  The dynamic interplay between oxytocinergic and stress-axis signalling provides a physiological substrate for flexible caregiving—allowing mothers to switch between nurturing and protective states depending on context.
+        
+    \subsection{Neural Circuits and Decision Making}
+        Maternal behaviour arises from an integrated network of brain regions collectively termed the ``maternal circuit.''  Core components include the medial preoptic area (MPOA) of the hypothalamus, amygdala, nucleus accumbens, and prefrontal cortex \cite{numan2018, dulac2014}.  The MPOA acts as a hub integrating hormonal and sensory inputs; lesions in this region abolish maternal care, whereas stimulation reinstates it even in nulliparous females.
+        
+        Sensory processing of offspring cues—olfactory, auditory, and visual—is transmitted to the amygdala, where emotional salience is assigned, and to the reward system via dopaminergic pathways.  The mesolimbic dopamine system, particularly projections from the ventral tegmental area to the nucleus accumbens, mediates the motivational aspects of maternal care and reinforces caregiving behaviour through reward prediction.
+        
+        Higher-order regulation occurs in the prefrontal cortex, which supports flexible decision-making and the integration of competing drives such as care, defense, and self-maintenance.  Functional imaging in humans and electrophysiological studies in rodents show overlapping activation in parental and reward circuits, suggesting a shared neural architecture for caregiving and prosocial motivation.
+        
+        Computationally, these neural circuits can be represented as hierarchical decision systems, where hormonal state sets gain parameters for motivational weighting, and sensory input updates action values through reinforcement-like processes.  Such abstractions guide the development of artificial agents capable of adaptive caregiving decisions driven by internal states and environmental contingencies.
+
+    % \subsection{Evidence from Experimental Studies}
+
+% ===== Environmental & social factors =====
+\section{Environmental and Social Factors}
+Maternal strategies are not expressed in isolation but emerge from the interaction between intrinsic biological mechanisms and extrinsic ecological pressures.  Environmental variability, population density, predation risk, and social organization all modulate the costs and benefits of caregiving.  The following subsections review how resource distribution, predation, and social structure influence the evolution and expression of maternal behaviour across species.
+
+    \subsection{Resource Availability and Competition}
+        Resource abundance and distribution fundamentally determine the energetic feasibility and competitive dynamics of maternal care. When resources are plentiful and evenly distributed, females can invest more consistently in their offspring, leading to stable or cooperative maternal systems. Conversely, when resources are scarce or patchy, mothers must allocate care strategically, often at the expense of other females or offspring \cite{emlen1977, cluttonbrock2016}.  
+
+        In mammals and birds, food limitation has been shown to increase infanticide, abandonment, and reduced provisioning rates, particularly under high population density \cite{stockley2011}.  Resource competition also interacts with social dominance: high-ranking females in primates and carnivores monopolize feeding territories and thus produce heavier, more viable offspring \cite{sapolsky2005}.  In contrast, in cooperative breeders such as meerkats, shared provisioning buffers environmental variability, reducing the direct cost of scarcity per individual helper \cite{cluttonbrock2002}.  
+        
+        Experimental manipulations in rodents and birds demonstrate that mothers dynamically adjust litter size, nursing duration, and foraging effort in response to perceived food availability—behavioural plasticity that increases reproductive efficiency across fluctuating environments.  Computationally, such adaptive allocation can be modelled as dynamic optimization under energetic constraints, where agents update maternal effort according to real-time resource feedback.
+
+    \subsection{Predation Pressure and Group defense}
+
+        Predation risk exerts a strong selective pressure on maternal behaviour and social organization.  In species facing high predator density, collective vigilance and cooperative defense can significantly improve offspring survival \cite{ebensperger2001, ridley2007}.  Group-living mothers often synchronize reproduction, share vigilance duties, and employ communal nesting to reduce per capita predation risk.  For example, ground squirrels and meerkats emit alarm calls that alert both kin and non-kin, reflecting an adaptive trade-off between self-risk and inclusive benefits.
+        
+        Predation also shapes spatial and temporal aspects of maternal care.  In high-risk habitats, females exhibit more cryptic nesting behaviour, shorter foraging excursions, and enhanced aggression toward intruders.  Comparative analyses in birds reveal that nest concealment and coordinated mobbing evolve most frequently in environments with intermediate predation intensity—balancing the costs of defense with reproductive payoff.  
+        
+        At the computational level, predation risk can be represented as an environmental hazard function influencing maternal decision policies.  Agents exposed to higher simulated predation parameters may adopt risk-sensitive strategies such as shorter foraging intervals or increased clustering, reproducing the emergent trade-offs observed in nature.
+
+    % \subsection{Social Structure and Reciprocity}
+    \subsection{Relatedness and social structure}
+
+        Social organization defines the network through which maternal effort, protection, and learning are distributed.  In species with strong kin networks, such as elephants, primates, and cetaceans, cooperative allomaternal care enhances offspring survival and accelerates social learning \cite{mcnamara2008, hamilton1964a}.  In contrast, in low-relatedness or fluid social systems—such as solitary carnivores—maternal care remains exclusive and fiercely territorial.
+        
+        The degree of relatedness among group members shapes the evolution of both cooperation and competition.  High relatedness promotes tolerance, communal nesting, and shared lactation, whereas low relatedness favours individualistic or aggressive maternal tactics \cite{lukas2018}.  Long-term studies in social mammals show that stable matrilineal hierarchies enable the inheritance of social rank and knowledge, fostering intergenerational continuity of care.
+        
+        At a theoretical level, social structure can be formalized as a network graph in which nodes represent individuals and edges represent relatedness or affiliative strength.  Network simulations and multi-agent reinforcement learning have demonstrated that increasing the weight of kinship edges enhances global stability and cooperation, echoing empirical findings in group-living species \cite{wang2018}.  Such computational analogues provide a bridge between the statistical structure of animal societies and the emergent dynamics of artificial multi-agent systems.
+
+
+% ===== Evolutionary theories =====
+\section{Evolutionary Theories of Altruism}
+Altruism—defined as behaviour that benefits others at a cost to the actor—poses a fundamental challenge to classical Darwinian selection.  Over the past half-century, multiple theoretical frameworks have been developed to explain how such prosocial traits can evolve and persist.  These include kin selection and inclusive fitness theory, reciprocal altruism, and group or multi-level selection.  Together, these models provide complementary perspectives for understanding the evolution of maternal care, cooperation, and prosociality in both biological and artificial systems.
+
+    \subsection{Kin Selection and Inclusive Fitness} % Just summarize from the above `kin selection`
+        
+        Kin selection theory explains altruism through genetic relatedness: a behaviour is favoured when the inclusive fitness benefits to relatives, weighted by relatedness, exceed the actor’s personal cost \cite{hamilton1964a, hamilton1964b}.  This principle, formalized as Hamilton’s rule ($r b > c$), integrates direct and indirect reproductive success into a single measure of evolutionary payoff.
+
+        Empirical studies across taxa support kin selection as a central mechanism underlying maternal care and cooperative breeding.  Examples include kin-biased adoption in red squirrels, sex allocation in eusocial Hymenoptera, and kin-dependent provisioning in birds and mammals \cite{gorrell2010, cluttonbrock2002}.  Inclusive fitness theory remains the dominant framework for explaining how natural selection operates on social interactions within families, linking genetic relatedness to behavioural outcomes.
+        
+        Computationally, kin selection has been represented through agent-based models where relatedness functions as a probability of shared genes or mutual reward.  Reinforcement-learning agents using relatedness-weighted payoff functions reproduce the emergence of helping behaviour and parental investment when the expected benefit-to-cost ratio satisfies Hamilton’s inequality.  These models provide formal bridges between evolutionary biology and multi-agent AI \cite{wang2018}.
+
+        % --- Theoretical Foundation ---
+    % \subsection{Theoretical foundation}
+        % \subsubsection{Theoretical Foundation} 
+        \subsubsection{Statement of Hamilton's Rule}
+        Hamilton's rule gives the condition under which a social behaviour that is costly to an actor but beneficial to a recipient will be favoured by natural selection via inclusive fitness:
+        \begin{equation}
+          r\,b - c > 0,
+          \label{eq:hamilton}
+        \end{equation}
+
+        where $c>0$ is the direct fitness cost to the actor, $b>0$ is the direct
+        fitness benefit to the recipient, and $r$ is the genetic relatedness
+        between actor and recipient\cite{hamilton1964a, hamilton1964b}.
+
+        % \subsubsection{Notation and Inclusive Fitness}
+        % Let $W_i$ denote the inclusive fitness effect attributable to individual
+        % $i$'s action. A convenient linear form is
+        % \begin{equation}
+        %   W_i \;=\; -\,c_i \;+\; \sum_{j \neq i} r_{ij}\, b_{ij},
+        %   \label{eq:w_inclusive}
+        % \end{equation}
+        % with $c_i$ the actor’s direct cost and $b_{ij}$ the direct benefit to
+        % recipient $j$, each weighted by relatedness $r_{ij}$.
+
+        % \begin{table}[h!]
+        %   \centering
+        %   % \caption{Symbols used in \Cref{eq:hamilton,eq:w_inclusive}.}
+        %   \caption{Symbols used in Eqs.~(\ref{eq:hamilton}) and~(\ref{eq:w_inclusive}).}
+
+        %   \begin{tabular}{ll} % two columns: left and left
+        %     \toprule
+        %     Symbol & Meaning \\
+        %     \midrule
+        %     $c$ & Direct fitness cost to the actor (expected loss in offspring) \\
+        %     $b$ & Direct fitness benefit to a recipient (expected gain in offspring) \\
+        %     $r$ & Genetic relatedness (e.g., regression of recipient genotype on actor genotype) \\
+        %     $W_i$ & Inclusive fitness effect of $i$’s action \\
+        %     \bottomrule
+        %   \end{tabular}
+        % \end{table}
+
+    \subsection{Reciprocal Altruism}
+        Reciprocal altruism expands the scope of cooperation beyond kin by allowing repeated interactions and conditional strategies \cite{trivers1971}.  In this framework, individuals help others with the expectation of future return, creating a feedback loop that stabilizes cooperation over time.  Iterated game-theoretic models such as the ``tit-for-tat'' strategy demonstrate that reciprocity can evolve when individuals repeatedly interact and can remember partners’ previous behaviours \cite{axelrod1981}.
+
+        Empirical support for reciprocity is found in vampire bats that share blood meals with previous donors, cleaner fish that maintain mutualistic relationships with clients, and primates that exchange grooming for coalitionary support \cite{carter2013, bshary2008}.  In maternal contexts, reciprocal care is observed in communal nesting rodents and cooperative primates, where mothers alternately nurse or guard each other’s offspring, generating long-term fitness gains for all participants.
+        
+        In computational modelling, reciprocal altruism is captured through reinforcement learning with memory or state-dependent cooperation.  Agents adopt conditional helping policies that reinforce cooperation when interactions are repeated and partner identity is retained.  These simulations illustrate how reciprocity and reputation tracking can sustain altruistic dynamics even in the absence of genetic relatedness.
+
+    \subsection{Group Selection and Multi-level Selection}
+
+        Group selection, and its modern extension—multi-level selection theory—proposes that natural selection acts not only at the level of individuals or genes but also among groups.  Cooperative traits that are costly within groups can nevertheless spread if they enhance the survival or reproduction of the group as a whole \cite{wilson2007, okasha2006}.  In this view, individual fitness is nested within group fitness, and evolutionary stability depends on the relative strength of selection at each level.
+        
+        Empirical examples include eusocial insects, cooperative birds, and human societies, where groups with higher internal cooperation outcompete less cohesive ones.  Mathematical formulations of multi-level selection are formally equivalent to inclusive fitness models under many conditions, though they emphasize different causal partitions of selection \cite{nowak2006}.  
+        
+        In computational and robotics contexts, multi-level selection is implemented through population-level optimization or hierarchical reinforcement learning.  Agents organized into collectives are rewarded for both individual and group performance, leading to emergent division of labour and cooperative specialization.  These models parallel the evolution of task differentiation and social cohesion observed in biological systems.
+        
+        Collectively, these theories—kin selection, reciprocity, and multi-level selection—illustrate how altruism can evolve through different but overlapping pathways.  For maternal care, they provide an integrated explanatory framework: kin selection accounts for family-directed investment, reciprocity captures cooperative exchanges among peers, and multi-level selection explains the emergence of group-level coordination.  Together, they inform both the biological understanding of caregiving and the design of prosocial, bio-inspired artificial agents.
+        
+    % \subsection{Other Mechanisms}
+
+% ====== Model and Previous work =====
+\section{Computational Models and Bio-inspired Robotics}
+Computational modelling provides a quantitative and mechanistic bridge between evolutionary theory and the design of intelligent agents capable of social and caregiving behaviour.  By abstracting the principles of kin selection, reciprocity, and cooperation into formal decision rules, computational models allow systematic exploration of how altruistic and maternal-like behaviours can emerge in artificial systems.  This section reviews three major modelling paradigms—game theory and agent-based simulations, reinforcement learning and emergent cooperation, and bio-inspired applications to caregiving and prosocial AI.
+
+    \subsection{Game theory and agent-based models}
+        Evolutionary game theory provides a foundational framework for analysing the conditions under which cooperation and altruism evolve.  Early models such as the Prisoner’s Dilemma and Hawk–Dove games demonstrated that simple payoff structures can capture complex trade-offs between competition and cooperation \cite{maynardsmith1973, nowak2004}.  Within these frameworks, strategies evolve according to their relative fitness payoffs, revealing equilibrium points such as Evolutionarily Stable Strategies (ESS).
+        
+        Agent-based models (ABMs) extend game-theoretic reasoning by simulating populations of autonomous individuals who interact locally under ecological constraints.  These models can incorporate relatedness, spatial proximity, resource availability, and recognition error, allowing direct testing of Hamiltonian and group-selection predictions in dynamic environments \cite{wilensky1999, west2011}.  For example, agents governed by the rule $r b > c$ spontaneously form kin clusters and cooperative alliances when migration rates and recognition accuracy are tuned appropriately.  
+        
+        ABMs have also been used to study the evolution of parental and alloparental care, demonstrating how cooperation can emerge from repeated local interactions and feedback between social structure and resource ecology.  Such simulations provide a conceptual bridge between animal behaviour and synthetic populations of robotic or digital agents, where cooperation arises from decentralized decision rules rather than centralized control.
+        
+    \subsection{Reinforcement learning and emergent cooperation}
+
+        Reinforcement learning (RL) extends evolutionary principles to adaptive agents that learn through experience rather than genetic inheritance.  In multi-agent RL (MARL), cooperation and altruism emerge as agents discover policies that maximize cumulative reward within shared environments \cite{leibo2017, wang2018}.  When reward functions include components for collective or partner success, agents learn prosocial strategies analogous to biological cooperation and parental care.
+        
+        Recent work demonstrates that RL agents equipped with memory, empathy-like state estimation, or communication channels can evolve reciprocity, fairness, and resource sharing—behaviours long studied in evolutionary biology.  For instance, agents trained in sequential social dilemmas display adaptive alternation between competitive and cooperative phases, reminiscent of conditional altruism observed in primates and cooperative breeders \cite{hughes2018, jaques2019}.  
+        
+        From a neural perspective, RL architectures parallel the biological reinforcement systems that guide caregiving behaviour.  Dopaminergic-like reward prediction mechanisms, state-value representations, and hormonal modulation analogues can be implemented to reproduce the dynamic balance between nurturing, defense, and self-maintenance.  This convergence highlights the shared computational logic between biological and artificial systems of social learning.
+
+    \subsection{Applications to caregiving and prosocial AI}
+        Insights from biological maternal behaviour and cooperation have inspired the emerging field of bio-inspired robotics and prosocial AI.  In robotics, caregiving algorithms have been implemented to enable companion or assistive robots to prioritize vulnerable agents, maintain proximity, and provide adaptive aid \cite{breazeal2003, kuntoro2022}.  These systems often employ emotional appraisal modules or hormonal analogues (e.g., ``oxytocin-like'' control parameters) to regulate social engagement intensity.
+        
+        At the population level, swarm and collective robotics use multi-agent cooperation to achieve group-level resilience and resource allocation reminiscent of cooperative breeding systems \cite{trianni2008, hamann2018}.  Here, altruistic or defensive behaviours can be modelled through reward shaping and hierarchical coordination, producing emergent task specialization analogous to maternal defense or communal care.
+        
+        In prosocial AI, evolutionary and reinforcement-based models are now being combined with neural architectures that incorporate empathy, reciprocity, and fairness constraints.  These approaches aim to build artificial agents capable of context-sensitive altruism—agents that balance self-interest with concern for others’ welfare \cite{wang2018, fortune2025}.  Integrating these biologically grounded principles into AI design not only advances robotics but also offers a framework for embedding ethical and adaptive caregiving behaviours into future intelligent systems.
+
+    \subsection{Neuroplasticity, Hebbian learning, and homeostasis (conceptual links)}
+        Biological caregiving is shaped not only by evolutionary selection but also by within-lifetime adaptation in neural and physiological systems. \textbf{Neuroplasticity} refers broadly to the capacity of the nervous system to change its functional organization in response to experience. A classical family of mechanisms is \textbf{Hebbian learning}---often summarized as ``cells that fire together wire together''---which formalizes how correlated activity can strengthen synaptic connections and thereby change behavioral tendencies over time \cite{hebb1949}.
+
+        A complementary principle is \textbf{homeostasis}: organisms regulate internal variables (energy balance, temperature, stress load) around viable ranges despite fluctuating environments. In computational terms, homeostatic regulation can be viewed as maintaining internal state variables within bounds by selecting actions that counteract deficits. This framing motivates the thesis design choice to drive behavior via internal state deficits and hormone-like modulators rather than via purely external reward shaping \cite{cannon1932}.
+
+        \paragraph{Relevance to this thesis.}
+        The plasticity mechanisms in this thesis are not neuron-level Hebbian synaptic learning; instead, they adjust \emph{motivation weights} that map internal deficits and modulators to action selection. Nevertheless, the biological literature motivates the idea that \emph{within-lifetime parameter change} can improve behavior (plasticity), while longer-term selection can stabilize beneficial settings (evolution), consistent with a Baldwin-style interaction between learning and evolution.
+
+    \subsection{Genetic algorithms vs.\ evolutionary strategies (what we use)}
+        Many artificial life and optimization studies use \textbf{genetic algorithms (GAs)}---population-based evolutionary search with selection, recombination, and mutation---as a general-purpose mechanism for discovering controllers \cite{holland1975, goldberg1989}. In contrast, the optimization procedure used in this thesis is a \textbf{single-lineage} $(1{+}1)$ evolutionary strategy: each generation proposes one Gaussian mutation of the current best genome and accepts it only if fitness improves \cite{rechenberg1973, schwefel1977}. This choice emphasizes mechanistic interpretability of a single evolving maternal lineage and reduces confounds from population dynamics, while still implementing the core evolutionary ingredients of variation and selection.
+
+    
+
+        A particularly relevant bioinspired robotics study is that of Maroto-Gómez et al. (2024) \cite{marotogomez2024}, who proposed a neuroendocrine model for adaptive social behavior in a social robot using oxytocin, arginine vasopressin, and dopamine as internal modulators of bonding and action selection. In their architecture, perceived social stimuli influence artificial neuroendocrine variables, which then regulate physiological and psychological processes, motivations, and ultimately behavior. A central component of the model is a dynamic pair-bonding variable, which increases under positive interaction and decreases under aversive interaction, thereby shaping future social responses. Their results showed that this bioinspired pair-bonding mechanism improved perceived attachment and social presence compared with a random behavior baseline. This work is especially relevant to the present thesis because it demonstrates that biologically inspired internal regulation can generate adaptive social behavior in artificial agents. However, its focus is human--robot interaction within a single robot-user relationship, whereas the present thesis extends the problem toward maternal caregiving, environmental pressures, and evolutionary emergence across generations.
+
+
+
+
+
+
+
+% ===== Research Gap and Contribution =====
+\section{Research Gap and Contribution}
+
+Despite extensive research across biology, neuroscience, and artificial intelligence, a critical interdisciplinary gap remains in understanding how maternal-like caregiving behavior can emerge in artificial systems. Existing work has examined the biological mechanisms of maternal care, theoretical models of altruism, and computational simulations of cooperation, yet these domains remain only loosely connected. Bridging them requires a unified framework that translates the adaptive logic of maternal behavior into computational form while remaining sufficiently simple for systematic simulation and analysis.
+
+Recent work in bio-inspired robotics has begun to explore this direction. For example, Maroto-Gómez et al. (2024) \cite{marotogomez2024} proposed a neuroendocrine-inspired architecture for social robots in which hormone-like variables such as oxytocin, arginine vasopressin, and dopamine regulate pair-bonding and behavioral responses during human--robot interaction. Their model demonstrates that internal physiological-style variables can influence social motivation and adaptive behavior in artificial agents.
+
+However, this framework focuses primarily on pair-bonding dynamics within short-term human--robot interaction sessions. It does not address how caregiving strategies might emerge or evolve within populations of artificial agents interacting across generations under ecological constraints. As a result, the evolutionary mechanisms through which maternal-like caregiving behaviors could arise in artificial systems remain largely unexplored.
+
+Another limitation of existing biologically inspired architectures is that many models rely on manually specified parameter values. In the work of Maroto-Gómez et al. (2024) \cite{marotogomez2024}, the influence of internal variables on motivational processes is determined by predefined weights that are selected heuristically during system design. While this approach demonstrates that neuroendocrine-inspired internal states can influence social behavior, it leaves open the question of how such parameters should arise autonomously in artificial systems.
+
+In biological organisms, behavioral regulation parameters are not manually specified but instead emerge through a combination of evolutionary selection and adaptive plasticity during an individual's lifetime. Inspired by this principle, the present thesis investigates whether the parameters governing maternal decision-making can emerge through evolutionary processes and plastic adaptation rather than being predetermined by the system designer.
+
+Specifically, this research introduces two complementary mechanisms. First, plasticity mechanisms allow motivational weights to adjust during an agent's lifetime based on behavioral outcomes. Second, evolutionary selection operates across generations, allowing inherited behavioral parameters to evolve according to offspring survival. Together, these mechanisms enable the discovery of behavioral regulation parameters through adaptive processes rather than manual specification.
+
+This thesis therefore develops an evolutionary agent-based framework that integrates biologically inspired internal regulation, motivational decision processes, and generational selection. Through this framework, the study investigates how maternal caregiving strategies may emerge and stabilize in artificial populations under varying environmental pressures.
+
+\subsection{Identified Research Gap}
+
+The preceding literature reveals three important but only partially integrated research streams:
+
+\begin{itemize}
+    \item \textbf{Biological studies of maternal care} identify genetic, hormonal, and neural mechanisms underlying caregiving behavior. However, these findings are primarily descriptive and are rarely translated into computational architectures for artificial agents.
+
+    \item \textbf{Evolutionary theories of altruism}---including kin selection, reciprocity, and multi-level selection---explain why prosocial behaviors may evolve. However, they do not directly specify how internal regulatory mechanisms produce context-dependent caregiving decisions within individual agents.
+
+    \item \textbf{Computational models of cooperation} in artificial intelligence and robotics demonstrate emergent coordination and adaptation. However, many such models rely on simplified agents and often do not incorporate biologically inspired internal states, motivational competition, or hormone-like modulation mechanisms.
+\end{itemize}
+
+\noindent
+\textbf{Research gap:} There is currently no widely established computational framework that simultaneously integrates (i) biologically inspired internal regulation, (ii) motivational decision mechanisms, and (iii) evolutionary adaptation across generations in order to investigate the emergence of maternal-like caregiving behavior in artificial populations. Consequently, the minimal mechanisms required for context-sensitive and intrinsically motivated caregiving behavior in artificial agents remain insufficiently understood.
+
+
+\subsection{Research Contribution}
+
+This thesis contributes to addressing this gap through the following elements:
+
+\begin{enumerate}
+    \item \textbf{An evolutionary agent-based model of maternal caregiving behavior.}  
+    This research develops a multi-agent simulation in which maternal agents interact with offspring, environmental resources, and potential threats across multiple generations. Behavioral tendencies are represented through inheritable computational parameters that influence caregiving, protection, self-maintenance, and foraging behavior.
+
+    \item \textbf{A computational abstraction of biological maternal mechanisms.}  
+    The proposed model represents key biological concepts—including internal physiological regulation, hormone-like modulation, and motivational decision-making—as computational variables and weighted interactions that govern maternal behavior.
+
+    \item \textbf{Integration of lifetime plasticity and evolutionary adaptation.}  
+    The framework integrates behavioral adaptation within an agent's lifetime through plasticity mechanisms together with evolutionary selection operating across generations. This dual-timescale approach allows investigation of how caregiving strategies adapt both during an agent's lifetime and through long-term evolutionary processes.
+
+    \item \textbf{Systematic investigation of environmental determinants.}  
+    Controlled computational experiments are used to examine how environmental factors such as resource availability, environmental threats, and population structure influence the emergence and stability of maternal behavioral strategies.
+
+    \item \textbf{Design implications for prosocial artificial agents.}  
+    The resulting framework provides biologically inspired principles for constructing artificial agents capable of adaptive and context-sensitive caregiving behavior without relying exclusively on explicit reward engineering or rigid rule-based control.
+\end{enumerate}
+
+
+
+
+\subsection{Expected Outcomes}
+
+The research is expected to generate both scientific and computational contributions:
+
+\begin{itemize}
+    \item \textbf{Scientific insight:} Improved understanding of how simplified biological mechanisms (internal regulation, hormone-like modulation, behavioral plasticity, and evolutionary inheritance) can give rise to adaptive caregiving behavior.
+
+    \item \textbf{Computational contribution:} A simulation framework for studying the emergence of maternal-like behavior in artificial agent populations under varying environmental conditions.
+
+    \item \textbf{AI design implications:} Conceptual and practical guidance for designing prosocial artificial agents whose behavior is shaped by intrinsic regulatory mechanisms and adaptive evolutionary pressures rather than solely by externally specified reward functions.
+\end{itemize}
+
+
+
+\subsection{Summary}
+
+In summary, this thesis integrates biological insights on maternal behavior, evolutionary theory, and computational modeling within a unified framework for studying the emergence of caregiving strategies in artificial agents. By treating maternal behavior as an adaptive and evolving property of biologically inspired systems, this research contributes both to the scientific understanding of prosocial behavior and to the design of more adaptive and socially aligned artificial intelligence systems.

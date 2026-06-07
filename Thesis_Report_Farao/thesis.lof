@@ -1,0 +1,26 @@
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces \textbf {Left:} Internal-state pipeline of the mother agent. Solid arrows indicate state/perceptual signals, dashed gray arrows indicate action feedback, and dashed red arrows indicate threat-induced child injury. \textbf {Right:} Illustrative grid-world scenarios: \textbf {(a)} threat patrol, \textbf {(b)} mother protective approach, \textbf {(c)} threat flee. In the grid panels, arrows indicate movement direction rather than internal signals. \textbf {C}\nobreakspace {}=\nobreakspace {}child, \textbf {M}\nobreakspace {}=\nobreakspace {}mother, \textbf {T}\nobreakspace {}=\nobreakspace {}threat, \textbf {F}\nobreakspace {}=\nobreakspace {}food.}}{35}{figure.3.1}%
+\contentsline {figure}{\numberline {3.2}{\ignorespaces A 2D grid world representation of the \textbf {Mother–Child Interaction Model}. The mother (M) searches for food (F) and protects the child (C) within the environment while responding to nearby threats (T). Dotted circles indicate sensory perception ranges, and the wavy purple line represents the maternal bond.}}{38}{figure.3.2}%
+\contentsline {figure}{\numberline {3.3}{\ignorespaces Single-lineage $(1{+}1)$ evolutionary search used in this thesis. Each generation proposes one Gaussian mutation of the current best motivation-weight genome, evaluates it over $N$ stochastic rollouts, and accepts it only if mean fitness improves.}}{43}{figure.3.3}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {4.1}{\ignorespaces Distribution of child (left) and mother (right) time-to-death across baseline rollout conditions in the training world. Boxes show median and interquartile range (IQR) over independent episode replicates. The y-axis is survival time in days (100 simulation ticks per day).}}{49}{figure.4.1}%
+\contentsline {figure}{\numberline {4.2}{\ignorespaces Kaplan--Meier survival curves for child (left) and mother (right) by baseline condition.}}{50}{figure.4.2}%
+\contentsline {figure}{\numberline {4.3}{\ignorespaces Representative rollout dynamics aggregated over 128 stochastic episode seeds (mean $\pm $ std): (a)\nobreakspace {}$P(\text {alive})$; (b)\nobreakspace {}child hunger, warmth, injury; (c)\nobreakspace {}motivation activity; (d)\nobreakspace {}mother internal states.}}{50}{figure.4.3}%
+\contentsline {figure}{\numberline {4.4}{\ignorespaces Plasticity sweep (world $\times $ $\alpha _{\text {child}}$)}}{51}{figure.4.4}%
+\contentsline {figure}{\numberline {4.5}{\ignorespaces $L_2$ genome drift vs.\ generation (MA window 50; mean $\pm $ SEM over 30 lineages). Color = plasticity; linestyle = initialization. Population aggregate, not one mother.}}{52}{figure.4.5}%
+\contentsline {figure}{\numberline {4.6}{\ignorespaces Exemplar fixed-genome weights $u_{\text {fixed}}$ at checkpoints (0--3000, every 500 gens): one seed per init (anti / random / pro). Rows = 13 motivation leaves. Not a 30-seed average; see Figure\nobreakspace {}\ref {fig:exp3_lineage_weights_l2} for population drift.}}{53}{figure.4.6}%
+\contentsline {figure}{\numberline {4.7}{\ignorespaces Selected motivation weights vs.\ generation ($3\times 3$: init $\times $ plasticity; mean $\pm $ IQR, 30 seeds).}}{53}{figure.4.7}%
+\contentsline {figure}{\numberline {4.8}{\ignorespaces Final weights (pro minus anti)}}{54}{figure.4.8}%
+\contentsline {figure}{\numberline {4.9}{\ignorespaces Child TTD across evolutionary stages (E2/P1/P2 panels; init-colored medians with IQR across genomes).}}{54}{figure.4.9}%
+\contentsline {figure}{\numberline {4.10}{\ignorespaces Conditional motivation probabilities and mean child hunger/warmth/injury during emergence.}}{55}{figure.4.10}%
+\contentsline {figure}{\numberline {4.11}{\ignorespaces Child outcomes on seen world (normal, food interval 15): per evolution seed (30 bars per panel; 10 rollouts each).}}{56}{figure.4.11}%
+\contentsline {figure}{\numberline {4.12}{\ignorespaces Same evaluation, pooled over seeds: three plasticity panels, one stacked bar per init.}}{56}{figure.4.12}%
+\contentsline {figure}{\numberline {4.13}{\ignorespaces E4 transfer on the $3\times 3$ grid (world $\times $ food interval 5/15/25; 5 = abundant, 25 = scarce). Columns: E2/P1/P2; line color: init.}}{57}{figure.4.13}%
+\contentsline {figure}{\numberline {4.14}{\ignorespaces Normalized child TTD on nine E4 cells (median $\pm $ IQR over 30 genomes).}}{58}{figure.4.14}%
+\contentsline {figure}{\numberline {4.15}{\ignorespaces Normalized mother TTD on nine E4 cells (same layout as child panel).}}{58}{figure.4.15}%
+\contentsline {figure}{\numberline {4.16}{\ignorespaces Dominant child outcome per E4 cell (A/hun/cold/inj; \% over 300 rollouts). Insets: world (rows) $\times $ food 5/15/25 (cols; 5 abundant, 25 scarce).}}{59}{figure.4.16}%
+\contentsline {figure}{\numberline {4.17}{\ignorespaces Outcomes pooled over all nine E4 cells, per evolution seed ($9\times 10$ rollouts per bar).}}{60}{figure.4.17}%
+\contentsline {figure}{\numberline {4.18}{\ignorespaces Same nine-cell pool, summarized by (plasticity, init).}}{60}{figure.4.18}%
+\addvspace {10\p@ }

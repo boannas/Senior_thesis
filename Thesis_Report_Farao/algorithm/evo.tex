@@ -1,0 +1,24 @@
+\begin{algorithm}[H]
+\caption{Single-lineage $(1{+}1)$ evolutionary search (implementation)}
+\begin{algorithmic}[1]
+\State \textbf{Parameters:} $G$ generations, $N$ episodes per evaluation, mutation $\sigma=0.05$
+\State \textbf{Fitness:} $F=\alpha\,\mathrm{TTD}_{child} + (1-\alpha)\,\mathrm{TTD}_{mother} - \lambda\,\mathrm{Injury}_{child}$
+
+\State Initialize best genome $U^{\text{fixed}} \gets$ baseline motivation weights (anti / random / pro)
+\State best fitness $f^\star \gets -\infty$
+
+\For{$g = 1$ to $G$}
+    \State Propose candidate genome $U_c \gets U^{\text{fixed}} + \epsilon$, where $\epsilon \sim \mathcal{N}(0,\sigma^2)$ elementwise
+    \State Clamp each weight in $U_c$ to $[0.05,1.0]$
+    \State Evaluate $U_c$ over $N$ stochastic rollouts (different RNG seeds) and compute mean fitness $\bar f_c$
+    \If{$\bar f_c > f^\star$}
+        \State Accept: $U^{\text{fixed}} \gets U_c$
+        \State $f^\star \gets \bar f_c$
+    \Else
+        \State Reject: keep $U^{\text{fixed}}$ unchanged
+    \EndIf
+\EndFor
+
+\State \Return best genome $U^{\text{fixed}}$ and trace statistics
+\end{algorithmic}
+\end{algorithm}

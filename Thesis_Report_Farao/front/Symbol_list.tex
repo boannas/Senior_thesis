@@ -1,0 +1,30 @@
+\chapter*{List of Symbols}
+\addcontentsline{toc}{chapter}{List of Symbols}
+
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.0cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.2cm}}
+\textbf{Symbol} & \textbf{Description} & \textbf{Unit / Type} \\[0.4cm]
+
+$\mathbf{u}$      & Motivation-weight genome vector of the mother agent        & --      \\
+$u_k$             & Individual motivation weight for action class $k$          & [0,1]   \\
+$g$               & Generation index in the evolutionary search                & --      \\
+$\epsilon$        & Gaussian mutation noise; $\epsilon \sim \mathcal{N}(0, 0.05^2)$ & --  \\
+$F$               & Composite fitness score of a candidate genome              & [0,1]   \\
+$\alpha$          & Child-fitness weighting coefficient in fitness function ($\alpha = 0.5$) & -- \\
+$\lambda$         & Injury penalty coefficient in fitness function ($\lambda = 0.002$)      & -- \\
+$\text{TTD}_m$    & Normalized time-to-death of the mother                    & [0,1]   \\
+$\text{TTD}_c$    & Normalized time-to-death of the child                     & [0,1]   \\
+$I_{\text{total}}$& Cumulative injury accumulated by the mother over an episode & --    \\
+$L_2$             & Euclidean (L2) distance between two genome weight vectors  & --      \\
+$N_s$             & Number of stochastic rollouts per genome evaluation ($N_s = 10$) & --  \\
+$N_{\text{seed}}$ & Number of independent evolution seeds ($N_{\text{seed}} = 30$)   & --  \\
+$T$               & Episode length in simulation ticks ($T = 1000$)            & ticks   \\
+$\eta$            & Plasticity learning rate (P1: adaptive; P2: fixed)         & --      \\
+$d_{\text{global}}$& Global deficit signal used by P1 plasticity regime        & --      \\
+$d_k$             & Local deficit signal for action class $k$, used by P2      & --      \\
+$\text{OT}$       & Oxytocin-like modulator signal (bonding/affiliation)        & a.u.    \\
+$\text{CORT}$     & Cortisol-like modulator signal (stress/threat response)     & a.u.    \\
+$P(a \mid s)$     & Conditional probability of selecting action $a$ given state $s$ & [0,1] \\
+$w_{50}$          & Window size for rolling average of L2 genome drift (50 generations) & gen \\
+\end{tabularx}

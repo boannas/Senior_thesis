@@ -1,0 +1,130 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\@writefile{toc}{\contentsline {chapter}{\numberline {4}Experiments and Results}{48}{chapter.4}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\newlabel{chap:experiments}{{4}{48}{Experiments and Results}{chapter.4}{}}
+\newlabel{chap:experiments@cref}{{[chapter][4][]4}{[1][48][]48}}
+\@writefile{toc}{\contentsline {section}{\numberline {4.1}Common experimental setup}{48}{section.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1.1}Environment and episode horizon}{48}{subsection.4.1.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1.2}Food spawn interval (E4 grid)}{48}{subsection.4.1.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1.3}Evolution and fitness}{48}{subsection.4.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1.4}Initialization regimes and plasticity regimes}{48}{subsection.4.1.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1.5}Reported metrics}{49}{subsection.4.1.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.2}Experiment 1: What ``maternal behavior'' looks like}{49}{section.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.1}Goal and training condition}{49}{subsection.4.2.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.2}Survival across baseline conditions}{49}{subsection.4.2.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.1}{\ignorespaces Distribution of child (left) and mother (right) time-to-death across baseline rollout conditions in the training world. Boxes show median and interquartile range (IQR) over independent episode replicates. The y-axis is survival time in days (100 simulation ticks per day).}}{49}{figure.4.1}\protected@file@percent }
+\newlabel{fig:exp1_ttd_boxplots}{{4.1}{49}{Distribution of child (left) and mother (right) time-to-death across baseline rollout conditions in the training world. Boxes show median and interquartile range (IQR) over independent episode replicates. The y-axis is survival time in days (100 simulation ticks per day)}{figure.4.1}{}}
+\newlabel{fig:exp1_ttd_boxplots@cref}{{[figure][1][4]4.1}{[1][49][]49}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.2}{\ignorespaces Kaplan--Meier survival curves for child (left) and mother (right) by baseline condition.}}{50}{figure.4.2}\protected@file@percent }
+\newlabel{fig:exp1_km_child_mother}{{4.2}{50}{Kaplan--Meier survival curves for child (left) and mother (right) by baseline condition}{figure.4.2}{}}
+\newlabel{fig:exp1_km_child_mother@cref}{{[figure][2][4]4.2}{[1][49][]50}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.3}Episode dynamics}{50}{subsection.4.2.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.3}{\ignorespaces Representative rollout dynamics aggregated over 128 stochastic episode seeds (mean $\pm $ std): (a)\nobreakspace  {}$P(\text  {alive})$; (b)\nobreakspace  {}child hunger, warmth, injury; (c)\nobreakspace  {}motivation activity; (d)\nobreakspace  {}mother internal states.}}{50}{figure.4.3}\protected@file@percent }
+\newlabel{fig:exp1_internal_states}{{4.3}{50}{Representative rollout dynamics aggregated over 128 stochastic episode seeds (mean $\pm $ std): (a)~$P(\text {alive})$; (b)~child hunger, warmth, injury; (c)~motivation activity; (d)~mother internal states}{figure.4.3}{}}
+\newlabel{fig:exp1_internal_states@cref}{{[figure][3][4]4.3}{[1][50][]50}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2.4}Takeaway (Experiment 1)}{50}{subsection.4.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.3}Experiment 2: Role of plasticity and the Baldwin effect}{51}{section.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.1}Hypothesis}{51}{subsection.4.3.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.2}Results}{51}{subsection.4.3.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.4}{\ignorespaces Plasticity sweep (world $\times $ $\alpha _{\text  {child}}$)}}{51}{figure.4.4}\protected@file@percent }
+\newlabel{fig:exp2_fitness_generations}{{4.4}{51}{Plasticity sweep (world $\times $ $\alpha _{\text {child}}$)}{figure.4.4}{}}
+\newlabel{fig:exp2_fitness_generations@cref}{{[figure][4][4]4.4}{[1][51][]51}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3.3}Takeaway (Experiment 2)}{52}{subsection.4.3.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.4}Experiment 3: Effect of initial maternal traits}{52}{section.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.1}Hypothesis}{52}{subsection.4.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.2}Genome drift ($L_2$ over 30 lineages)}{52}{subsection.4.4.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.5}{\ignorespaces $L_2$ genome drift vs.\ generation (MA window 50; mean $\pm $ SEM over 30 lineages). Color = plasticity; linestyle = initialization. Population aggregate, not one mother.}}{52}{figure.4.5}\protected@file@percent }
+\newlabel{fig:exp3_lineage_weights_l2}{{4.5}{52}{$L_2$ genome drift vs.\ generation (MA window 50; mean $\pm $ SEM over 30 lineages). Color = plasticity; linestyle = initialization. Population aggregate, not one mother}{figure.4.5}{}}
+\newlabel{fig:exp3_lineage_weights_l2@cref}{{[figure][5][4]4.5}{[1][52][]52}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.3}Exemplar weight paths (one seed per init)}{52}{subsection.4.4.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.6}{\ignorespaces Exemplar fixed-genome weights $u_{\text  {fixed}}$ at checkpoints (0--3000, every 500 gens): one seed per init (anti / random / pro). Rows = 13 motivation leaves. Not a 30-seed average; see Figure\nobreakspace  {}\ref  {fig:exp3_lineage_weights_l2} for population drift.}}{53}{figure.4.6}\protected@file@percent }
+\newlabel{fig:exp3_weight_transition}{{4.6}{53}{Exemplar fixed-genome weights $u_{\text {fixed}}$ at checkpoints (0--3000, every 500 gens): one seed per init (anti / random / pro). Rows = 13 motivation leaves. Not a 30-seed average; see Figure~\ref {fig:exp3_lineage_weights_l2} for population drift}{figure.4.6}{}}
+\newlabel{fig:exp3_weight_transition@cref}{{[figure][6][4]4.6}{[1][52][]53}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.4}Per-weight and final init contrast (30 seeds)}{53}{subsection.4.4.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.7}{\ignorespaces Selected motivation weights vs.\ generation ($3\times 3$: init $\times $ plasticity; mean $\pm $ IQR, 30 seeds).}}{53}{figure.4.7}\protected@file@percent }
+\newlabel{fig:exp3_weights}{{4.7}{53}{Selected motivation weights vs.\ generation ($3\times 3$: init $\times $ plasticity; mean $\pm $ IQR, 30 seeds)}{figure.4.7}{}}
+\newlabel{fig:exp3_weights@cref}{{[figure][7][4]4.7}{[1][53][]53}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.8}{\ignorespaces Final weights (pro minus anti)}}{54}{figure.4.8}\protected@file@percent }
+\newlabel{fig:exp3_diff_weights}{{4.8}{54}{Final weights (pro minus anti)}{figure.4.8}{}}
+\newlabel{fig:exp3_diff_weights@cref}{{[figure][8][4]4.8}{[1][53][]54}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.5}Child survival and need-dependent behavior}{54}{subsection.4.4.5}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.9}{\ignorespaces Child TTD across evolutionary stages (E2/P1/P2 panels; init-colored medians with IQR across genomes).}}{54}{figure.4.9}\protected@file@percent }
+\newlabel{fig:exp3_child_ttd_bounds}{{4.9}{54}{Child TTD across evolutionary stages (E2/P1/P2 panels; init-colored medians with IQR across genomes)}{figure.4.9}{}}
+\newlabel{fig:exp3_child_ttd_bounds@cref}{{[figure][9][4]4.9}{[1][54][]54}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.10}{\ignorespaces Conditional motivation probabilities and mean child hunger/warmth/injury during emergence.}}{55}{figure.4.10}\protected@file@percent }
+\newlabel{fig:exp3_child_state_motivation}{{4.10}{55}{Conditional motivation probabilities and mean child hunger/warmth/injury during emergence}{figure.4.10}{}}
+\newlabel{fig:exp3_child_state_motivation@cref}{{[figure][10][4]4.10}{[1][54][]55}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.6}Death causes on the seen world (normal, food interval 15)}{55}{subsection.4.4.6}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.11}{\ignorespaces Child outcomes on seen world (normal, food interval 15): per evolution seed (30 bars per panel; 10 rollouts each).}}{56}{figure.4.11}\protected@file@percent }
+\newlabel{fig:exp3_death_cause}{{4.11}{56}{Child outcomes on seen world (normal, food interval 15): per evolution seed (30 bars per panel; 10 rollouts each)}{figure.4.11}{}}
+\newlabel{fig:exp3_death_cause@cref}{{[figure][11][4]4.11}{[1][55][]56}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.12}{\ignorespaces Same evaluation, pooled over seeds: three plasticity panels, one stacked bar per init.}}{56}{figure.4.12}\protected@file@percent }
+\newlabel{fig:exp3_death_cause_merge}{{4.12}{56}{Same evaluation, pooled over seeds: three plasticity panels, one stacked bar per init}{figure.4.12}{}}
+\newlabel{fig:exp3_death_cause_merge@cref}{{[figure][12][4]4.12}{[1][56][]56}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4.7}Takeaway (Experiment 3)}{56}{subsection.4.4.7}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.5}Experiment 4: Generalization to unseen environments (E4)}{57}{section.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.1}Unseen condition grid}{57}{subsection.4.5.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.2}Transfer performance}{57}{subsection.4.5.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.13}{\ignorespaces E4 transfer on the $3\times 3$ grid (world $\times $ food interval 5/15/25; 5 = abundant, 25 = scarce). Columns: E2/P1/P2; line color: init.}}{57}{figure.4.13}\protected@file@percent }
+\newlabel{fig:exp4_unseen}{{4.13}{57}{E4 transfer on the $3\times 3$ grid (world $\times $ food interval 5/15/25; 5 = abundant, 25 = scarce). Columns: E2/P1/P2; line color: init}{figure.4.13}{}}
+\newlabel{fig:exp4_unseen@cref}{{[figure][13][4]4.13}{[1][57][]57}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.3}Child and mother TTD on the grid}{57}{subsection.4.5.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.14}{\ignorespaces Normalized child TTD on nine E4 cells (median $\pm $ IQR over 30 genomes).}}{58}{figure.4.14}\protected@file@percent }
+\newlabel{fig:exp4_child_TTD}{{4.14}{58}{Normalized child TTD on nine E4 cells (median $\pm $ IQR over 30 genomes)}{figure.4.14}{}}
+\newlabel{fig:exp4_child_TTD@cref}{{[figure][14][4]4.14}{[1][57][]58}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.15}{\ignorespaces Normalized mother TTD on nine E4 cells (same layout as child panel).}}{58}{figure.4.15}\protected@file@percent }
+\newlabel{fig:exp4_mother_TTD}{{4.15}{58}{Normalized mother TTD on nine E4 cells (same layout as child panel)}{figure.4.15}{}}
+\newlabel{fig:exp4_mother_TTD@cref}{{[figure][15][4]4.15}{[1][58][]58}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.4}Death causes per cell and pooled}{58}{subsection.4.5.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {4.16}{\ignorespaces Dominant child outcome per E4 cell (A/hun/cold/inj; \% over 300 rollouts). Insets: world (rows) $\times $ food 5/15/25 (cols; 5 abundant, 25 scarce).}}{59}{figure.4.16}\protected@file@percent }
+\newlabel{fig:exp4_dominant_cause}{{4.16}{59}{Dominant child outcome per E4 cell (A/hun/cold/inj; \% over 300 rollouts). Insets: world (rows) $\times $ food 5/15/25 (cols; 5 abundant, 25 scarce)}{figure.4.16}{}}
+\newlabel{fig:exp4_dominant_cause@cref}{{[figure][16][4]4.16}{[1][58][]59}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.17}{\ignorespaces Outcomes pooled over all nine E4 cells, per evolution seed ($9\times 10$ rollouts per bar).}}{60}{figure.4.17}\protected@file@percent }
+\newlabel{fig:exp4_death_seeds}{{4.17}{60}{Outcomes pooled over all nine E4 cells, per evolution seed ($9\times 10$ rollouts per bar)}{figure.4.17}{}}
+\newlabel{fig:exp4_death_seeds@cref}{{[figure][17][4]4.17}{[1][59][]60}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4.18}{\ignorespaces Same nine-cell pool, summarized by (plasticity, init).}}{60}{figure.4.18}\protected@file@percent }
+\newlabel{fig:exp4_death_merge}{{4.18}{60}{Same nine-cell pool, summarized by (plasticity, init)}{figure.4.18}{}}
+\newlabel{fig:exp4_death_merge@cref}{{[figure][18][4]4.18}{[1][60][]60}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5.5}Takeaway (Experiment 4)}{60}{subsection.4.5.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {4.6}Chapter summary}{61}{section.4.6}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {4.1}{\ignorespaces Summary of experimental questions and main outcomes.}}{61}{table.4.1}\protected@file@percent }
+\newlabel{tab:exp_summary}{{4.1}{61}{Summary of experimental questions and main outcomes}{table.4.1}{}}
+\newlabel{tab:exp_summary@cref}{{[table][1][4]4.1}{[1][60][]61}}
+\@setckpt{chapters/4_Experiment_result}{
+\setcounter{page}{62}
+\setcounter{equation}{0}
+\setcounter{enumi}{4}
+\setcounter{enumii}{0}
+\setcounter{enumiii}{0}
+\setcounter{enumiv}{0}
+\setcounter{footnote}{0}
+\setcounter{mpfootnote}{0}
+\setcounter{part}{0}
+\setcounter{chapter}{4}
+\setcounter{section}{6}
+\setcounter{subsection}{0}
+\setcounter{subsubsection}{0}
+\setcounter{paragraph}{0}
+\setcounter{subparagraph}{0}
+\setcounter{figure}{18}
+\setcounter{table}{1}
+\setcounter{Item}{17}
+\setcounter{Hfootnote}{0}
+\setcounter{Hy@AnnotLevel}{0}
+\setcounter{bookmark@seq@number}{95}
+\setcounter{parentequation}{0}
+\setcounter{float@type}{16}
+\setcounter{algorithm}{1}
+\setcounter{ALG@line}{16}
+\setcounter{ALG@rem}{0}
+\setcounter{ALG@nested}{0}
+\setcounter{ALG@Lnr}{2}
+\setcounter{ALG@blocknr}{10}
+\setcounter{ALG@storecount}{0}
+\setcounter{ALG@tmpcounter}{0}
+\setcounter{lstnumber}{1}
+\setcounter{section@level}{0}
+\setcounter{lstlisting}{0}
+}

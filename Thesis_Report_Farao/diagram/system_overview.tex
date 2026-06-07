@@ -1,0 +1,130 @@
+
+\begin{figure}[H]
+\centering
+% \begin{adjustbox}{center,max width=\textwidth}
+
+\resizebox{\textwidth}{!}{
+\begin{tikzpicture}[
+    box/.style={rectangle,draw,thick,rounded corners,minimum height=0.8cm},
+    process/.style={box,fill=gray!20},
+    neuro/.style={box,fill=green!20},
+    behavior/.style={box,fill=orange!20},
+    env/.style={box,fill=teal!15,minimum width=3.6cm,minimum height=1.2cm},
+    arrow/.style={->,>=Stealth,thick},
+    m2env/.style={arrow,draw=orange!80},        % Mother -> Environment
+    env2m/.style={arrow,draw=teal!70!black},    % Environment -> Mother
+    c2env/.style={arrow,draw=blue!70},          % Child -> Environment
+    env2c/.style={arrow,draw=violet!80!black,line width=1pt,
+    preaction={draw=white,line width=3pt}}, % Environment -> Child
+    feedback/.style={arrow,draw=blue!50,dashed} % internal feedback
+]
+
+% ---------- KEY: symmetric bounding box ----------
+\path[use as bounding box] (-9,0) rectangle (9,9.6);
+
+%% MOTHER SYSTEM (Left side - Full model)
+\node[font=\bfseries] at (-5,9.5) {MOTHER AGENT - Full Model};
+
+% Percept -> Stimuli
+\node[process] (m_percept) at (-7.3,7.5) {Perception};
+\node[process] (m_stimuli) at (-4.39,7.5) {Stimuli};
+\draw[arrow] (m_percept) -- (m_stimuli);
+
+% Neuroendocrine
+\node[neuro,minimum width=3cm] (m_neuro) at (-3.7,5.5) {Neuroendocrine};
+% \node[font=\tiny] at (-5,5.6) {OT, AVP, DA};
+\draw[arrow] (m_stimuli.south east) -- (m_neuro.north);
+
+% Biological process
+\node[neuro,minimum width=3cm] (m_bio) at (-7.5,5.5) {Biological Processes};
+% \node[font=\tiny] at (-5,5.6) {OT, AVP, DA};
+\draw[arrow] (m_stimuli.south west) -- (m_bio.north);
+
+% Motivation
+\node[process] (m_motiv) at (-5.3,3.5) {Motivation};
+\draw[arrow] (m_bio.south) to (m_motiv);
+\draw[arrow] (m_neuro.south) to  (m_motiv);
+
+
+% Selected Action
+\node[behavior] (m_behave) at (-5.3, 1.5) {Selected Behavior};
+% \node[font=\tiny] at (-5,0.9) {Approach, Feed, Protect, Warm};
+\draw[arrow] (m_motiv) to [out=-90, in=90] (m_behave);
+
+\draw[feedback] (m_behave.west) to[out=180,in=200]
+  node[pos=0.5,left,font=\tiny,xshift=55pt,yshift=2pt]
+  {Behavior effect} (m_bio.south west);
+\draw[feedback] (m_bio.north west) to[out=150,in=210]
+   node[pos=0.5,left,font=\tiny,xshift=65pt,yshift=-5pt]
+   {Allostatic regulation} (m_percept.west);
+
+% %% CHILD SYSTEM (Right side - Simplified model)
+\node[font=\bfseries] at (4.5,9.5) {CHILD AGENT - Simplified Model};
+
+%Perception
+\node[process,fill=blue!20] (c_percept) at (3,7.5) {Limited Perception};
+
+% Stimuli
+\node[process,fill=blue!20] (c_stimuli) at (6.7,7.5) {Stimuli};
+\draw[arrow] (c_percept) -- (c_stimuli);
+
+% Internal States
+\node[neuro,fill=blue!20] (c_needs) at (5,5.5) {Internal States};
+\draw[arrow] (c_stimuli) -- (c_needs);
+
+% Need Level (derived from internal states)
+\node[process,fill=blue!20] (c_distress) at (5,3.5) {Need Level};
+\draw[arrow] (c_needs) -- (c_distress) ;
+
+% In implementation, the mother directly observes child state variables;
+% we depict this as a need signal computed from internal states.
+\node[behavior,fill=blue!20] (c_signal) at (5,1.5) {Need Signals};
+\draw[arrow] (c_distress) -- (c_signal);
+
+\draw[feedback] (c_signal.east) to[out=0,in=0]
+  node[pos=0.2,left,font=\tiny,xshift=60pt,yshift=2pt]
+ {Comfort received} (c_needs.east);
+
+
+
+
+
+
+%% ENVIRONMENT (center)
+\node[env] (env) at (0,5.5) {Environment};
+
+% Mother <-> Environment
+\draw[m2env] (m_behave.east) to[out=0,in=200]  
+ node[pos=0.5,left,font=\tiny,xshift=50pt,yshift=2pt]
+ {Action to env.} (env.south west);
+\draw[env2m] (env.north) to[out=90,in=30] 
+ node[pos=0.5,left,font=\tiny,xshift=8pt,yshift=-5pt]
+ {Resources and Threats cue}(m_percept.north);
+
+%% Background highlight boxes (requires backgrounds library)
+\begin{scope}[on background layer]
+    \node[rectangle,draw=red!50,thick,dashed,minimum width=10cm,minimum height=9.5cm, fill=red!5] at (-5,5.4) {};
+    \node[rectangle,draw=blue!50,thick,dashed,minimum width=9cm,minimum height=9.5cm, fill=blue!5] at (4.5,5.4) {};
+\end{scope}
+
+% %% Child <-> Environment
+\draw[c2env] (c_signal.west) to[out=180, in=340]
+node[pos=0.5,left,font=\tiny,xshift=0pt,yshift=0pt]
+{Need cues}(env.south east);
+
+\draw[env2c] (env.north) to[out=90,in=180]
+node[pos=0.4,left,font=\tiny,xshift=35pt,yshift=-5pt]
+{Safety cue}(c_percept.west);
+
+% Title
+\node[font=\Large\bfseries] at (0, 10.8)
+  {Overview Neuroendocrine Systems};
+
+\end{tikzpicture}
+}
+\caption{Overview of the proposed neuroendocrine-inspired agent architecture. 
+The mother agent integrates perception, biological processes, and neuroendocrine modulation to generate motivations and select behaviors. 
+The child agent is simplified and represented by internal need states; these provide need cues that influence maternal perception and motivation.}
+\label{fig:neuroendocrine_systems}
+\end{figure}
+

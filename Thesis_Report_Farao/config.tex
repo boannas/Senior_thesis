@@ -1,0 +1,87 @@
+\usepackage{graphicx}
+\usepackage{geometry}
+% \usepackage{natbib}
+\geometry{
+    top=30mm,
+    bottom=30mm,
+    left=30mm,
+    right=30mm
+}
+\usepackage{setspace}
+
+% Layout robustness: reduce overfull boxes from long technical prose.
+% This does not change content; it allows TeX a bit more flexibility in line breaking.
+\setlength{\emergencystretch}{2em}
+
+\usepackage{titlesec}
+
+% Use XeLaTeX or LuaLaTeX (fontspec). Do not use pdfLaTeX with this config.
+\usepackage{fontspec}
+
+\usepackage[hidelinks]{hyperref}
+\usepackage{xurl}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{amsmath, amssymb}
+\usepackage{amsfonts}
+\usepackage{cleveref}
+
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,calc,patterns,decorations.markings}
+\usetikzlibrary{shapes,arrows,positioning,calc,patterns,decorations.pathreplacing}
+
+\usetikzlibrary{shapes,arrows,positioning,calc,arrows.meta,backgrounds}
+\usetikzlibrary{shadows}
+\usetikzlibrary{decorations.pathmorphing}
+% \usepackage{epigraph}
+
+
+% Times New Roman is often missing on Linux; use a Times-like fallback.
+\IfFontExistsTF{Times New Roman}{%
+  \setmainfont{Times New Roman}%
+}{%
+  \IfFontExistsTF{TeX Gyre Termes}{%
+    \setmainfont{TeX Gyre Termes}[
+      BoldFont = * Bold,
+      ItalicFont = * Italic,
+      BoldItalicFont = * Bold Italic,
+    ]%
+  }{%
+    \setmainfont{Liberation Serif}%
+  }%
+}
+
+% Chapter formatting
+\titleformat{\chapter}[block]  % "block" puts label + title together
+  {\centering\bfseries\fontsize{15pt}{18pt}\selectfont} % formatting: centered, bold, 15pt font
+  {Chapter \thechapter} % label text
+  {1em} % spacing between label and title
+  {} % code before title text
+
+% Section formatting
+\titleformat{\section}
+  {\bfseries\fontsize{14pt}{16pt}\selectfont} % bold + 14pt font, with line spacing
+  {\thesection} % section number
+  {1em} % spacing between number and title text
+  {} % code before the title text
+
+\titleformat{\subsection}[block]
+  {\bfseries\fontsize{13pt}{15pt}\selectfont} % bold + 13pt font
+  {\thesubsection} % number
+  {1em}            % spacing between number and text
+  {}             % actual title text
+
+% ===== THAI UNICODE SUPPORT =====
+% Don't use polyglossia - it can interfere with font selection
+% Just define Thai font directly
+\newfontfamily\thaifont{THSarabunNew.ttf}[
+    Path = ./font/,
+    BoldFont = THSarabunNew Bold.ttf,
+    ItalicFont = THSarabunNew Italic.ttf,
+    BoldItalicFont = THSarabunNew BoldItalic.ttf,
+    Script = Thai
+]
+
+% Simple Thai command that only changes font for Thai text
+\newcommand{\thai}[1]{{\thaifont #1}}
+% ================================

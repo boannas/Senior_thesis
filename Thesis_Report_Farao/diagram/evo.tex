@@ -1,0 +1,78 @@
+\begin{figure}[H]
+\centering
+\resizebox{0.95\textwidth}{!}{%  <-- keeps figure centered and scales to page width
+\begin{tikzpicture}[
+    node distance=1.5cm,
+    every node/.style={font=\small},
+    process/.style={rectangle, rounded corners, draw=blue!60, fill=blue!10, thick,
+        minimum width=2.5cm, minimum height=0.8cm, align=center},
+    decision/.style={diamond, draw=orange!60, fill=orange!10, thick,
+        minimum width=2cm, minimum height=1cm, align=center, aspect=2},
+    arrow/.style={->, >=stealth, thick}
+]
+
+% Title
+\node[font=\Large\bfseries] at (0,5.5) {Single-lineage $(1{+}1)$ Evolution};
+
+% Current best genome
+\node[process] (best) at (-4,4) {Current best\\genome $U^{fixed}$};
+
+% Mutation proposal
+\node[process] (mut) at (-4,2) {Propose mutation\\$U_c = U^{fixed} + \epsilon$\\$\epsilon\sim \mathcal{N}(0,0.05^2)$};
+
+% Clamp box
+\node[rectangle, draw=purple!60, fill=purple!10, thick,
+    minimum width=3.6cm, align=left, font=\footnotesize] (clamp) at (-4,0) {
+    \textbf{Clamp weights:}\\
+    each $u \in [0.05,1.0]$
+};
+
+% Evaluate
+\node[process] (eval) at (1,0) {Evaluate candidate\\over $N$ rollouts\\(different seeds)};
+
+% Fitness decision
+\node[decision] (acc) at (1,-2.5) {$\bar f_c > f^\star$?};
+
+% Reject / accept
+\node[process, fill=red!10, draw=red!60] (rej) at (6,-2.5) {Reject\\keep $U^{fixed}$};
+\node[process, fill=green!10, draw=green!60] (accept) at (1,-5.) {Accept\\$U^{fixed}\leftarrow U_c$\\$f^\star\leftarrow \bar f_c$};
+
+% Loop
+\node[process] (loop) at (1,-7.) {Next generation\\repeat};
+
+% % Selection annotation
+% \node[rectangle, draw=green!60, fill=green!10, thick,
+%     minimum width=3.5cm, align=left, font=\footnotesize] (selection) at (5,-6) {
+%     \textbf{Selection Pressure:}\\
+%     High-Alt mothers help others\\
+%     → Receive reciprocal help\\
+%     → Children survive longer\\
+%     → Genes persist
+% };
+
+% Arrows
+\draw[arrow] (best) -- (mut);
+\draw[arrow] (mut) -- (clamp);
+\draw[arrow] (clamp) -- (eval);
+\draw[arrow] (eval) -- (acc);
+\draw[arrow] (acc) -- node[above,font=\footnotesize] {No} (rej);
+\draw[arrow] (acc) -- node[right,font=\footnotesize] {Yes} (accept);
+\draw[arrow] (accept) -- (loop);
+\draw[arrow, dashed, bend left=100] (loop)
+  to node[font=\scriptsize, align=center] {} (best.west);
+
+% Environment factors
+\node[rectangle, draw=brown!60, fill=brown!10, thick,
+    minimum width=2.8cm, align=left, font=\footnotesize] (env) at (5,0.5) {
+    \textbf{Fitness signals:}\\
+    • child TTD (norm)\\
+    • mother TTD (norm)\\
+    • child injury penalty
+};
+\draw[arrow, dashed, brown!60] (env) -- (eval);
+
+\end{tikzpicture}
+} % <-- end resizebox
+\caption{Single-lineage $(1{+}1)$ evolutionary search used in this thesis. Each generation proposes one Gaussian mutation of the current best motivation-weight genome, evaluates it over $N$ stochastic rollouts, and accepts it only if mean fitness improves.}
+\label{fig:evolutionary_lifecycle}
+\end{figure}

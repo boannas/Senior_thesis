@@ -1,0 +1,740 @@
+\chapter{Methodology}
+
+\section{Overview and Research Design}
+\begin{sloppypar}
+This research employs a multi-method computational approach that integrates neuroendocrine-\allowbreak inspired behavioral mechanisms with evolutionary agent-based modeling.
+The methodology combines three complementary components:
+(i)~a simplified neuroendocrine-\allowbreak inspired internal regulation model using oxytocin- and cortisol-like modulators,
+(ii)~a single-lineage evolutionary search procedure for adapting inherited motivation weights across generations, and
+(iii)~a spatial grid-world simulation for environmental interactions.
+The design follows a bottom-up approach where individual-level internal regulation produces measurable behavioral and survival outcomes, and selection pressure shapes inherited parameters over generations.
+\end{sloppypar}
+
+
+\section{Conceptual Framework}
+\subsection{Neuroendocrine-Behavioral Pipeline}
+
+The behavioral architecture implemented in this thesis follows a biologically inspired neuroendocrine decision pipeline. Agent behavior emerges from the interaction between environmental perception, internal physiological states, hormone-like modulators, and motivational competition.
+
+\[
+\parbox{0.9\linewidth}{
+Environment $\rightarrow$ Perception $\rightarrow$ 
+Physiological States $\rightarrow$ Neuroendocrine Modulation 
+$\rightarrow$ Motivational Computation $\rightarrow$ Action Selection
+}
+\]
+
+In addition to this behavioral loop operating at each simulation step, the model incorporates two adaptive processes that operate at different time scales:
+
+\[
+\parbox{0.9\linewidth}{
+\textbf{Plasticity (within lifetime)} \qquad
+\textbf{Evolution (across generations)}
+}
+\]
+
+Plasticity allows behavioral parameters to adjust based on experience during an agent’s lifetime, while evolutionary selection propagates successful behavioral strategies across generations according to an explicit fitness function computed from stochastic rollouts (survival time and injury signals).
+
+
+
+
+\vspace{1em}
+    % \input{diagram/overall_diagram}
+    \begin{figure}[H]
+        \centering
+        \includegraphics[
+          page=1,
+          width=\linewidth,
+          trim=45mm 105mm 45mm 100mm,
+          clip
+        ]{diagram/SAB2026__Maternal_instinct-1.pdf}
+        \caption{%
+        \textbf{Left:} Internal-state pipeline of the mother agent. Solid arrows indicate
+        state/perceptual signals, dashed gray arrows indicate action feedback, and dashed
+        red arrows indicate threat-induced child injury.
+        \textbf{Right:} Illustrative grid-world scenarios:
+        \textbf{(a)} threat patrol,
+        \textbf{(b)} mother protective approach,
+        \textbf{(c)} threat flee.
+        In the grid panels, arrows indicate movement direction rather than internal
+        signals.
+        \textbf{C}~=~child,
+        \textbf{M}~=~mother,
+        \textbf{T}~=~threat,
+        \textbf{F}~=~food.}
+\label{fig:neuroendocrine_systems}
+
+      \end{figure}
+
+    Figure~\ref{fig:neuroendocrine_systems} illustrates the interaction between perception, physiological and psychological regulation, neuroendocrine modulation, and motivational decision processes in the proposed maternal agent architecture.
+
+    
+\paragraph{Genetic Traits.}
+Genetic traits represent inherited behavioral parameters that influence how internal signals affect motivational decisions. In the implemented codebase, the evolved genome corresponds to fixed motivation weights that map internal signals (child need, energy deficit, fear/stress, bonding/closeness) into competing motivation activations. Across generations, these fixed weights are mutated and selected via an accept-if-better rule based on mean fitness over multiple rollouts.
+
+
+
+
+\paragraph{Perception.}
+Perception represents the mechanism through which agents detect environmental cues and transform them into internal stimuli. In the implemented model, maternal perception includes nearby food resources, threat proximity, and spatial proximity to the child. Child need is represented by child state variables (hunger, warmth, injury), which the maternal internal regulation uses as inputs to motivation computation.
+
+
+
+
+
+\paragraph{Physiological States.}
+Physiological states represent homeostatic variables describing the agent’s internal condition. In the maternal agent these include energy level, fatigue, and other survival-related variables. In child agents, internal states include hunger, warmth deviation, and injury level. These variables evolve dynamically over time and generate deficits that activate motivational processes.
+
+
+
+
+
+\paragraph{Neuroendocrine States.}
+Neuroendocrine states represent hormone-like modulatory variables that regulate social and stress-related behavior. In the maternal agent, oxytocin promotes bonding and caregiving responses, while cortisol represents stress induced by environmental threats or internal deficits. These hormone-like variables integrate information from physiological states and environmental cues, influencing motivational priorities.
+
+\paragraph{Psychological (Motivational) States.}
+Psychological states represent internal motivational drives that determine behavioral priorities. These drives emerge from the interaction between physiological deficits and neuroendocrine modulation. In the maternal agent, competing motivations include caregiving, foraging, self-maintenance, and protection. The strength of each motivation is computed from weighted combinations of internal signals, and the dominant motivation determines the selected behavior.
+
+
+\paragraph{Motivational States.}
+Motivational states represent competing behavioral drives generated from internal physiological and neuroendocrine signals. Each motivation is computed as a weighted integration of relevant internal signals, producing activation values corresponding to behavioral goals such as foraging, caregiving, self-maintenance, or protection. The motivation with the highest activation determines the selected behavioral tendency.
+
+
+
+
+\paragraph{Action Output.}
+The action output represents the behavioral decision selected by the agent at each simulation step. The agent executes the action associated with the highest motivational activation. Maternal behavior is organized by four motivations (Forage, Care, Self, Protect) and implemented through primitive interactions such as movement, eating/collecting food, feeding the child, and staying close to provide warmth and protection. The child does not execute actions in the evaluated setting; instead, the mother observes the child's internal state variables (hunger, warmth, injury) and reacts through her motivation system. These actions modify the environment and close the perception–action feedback loop.
+
+
+\paragraph{Adaptive Mechanisms.}
+Two adaptive mechanisms operate in the proposed framework. First, plasticity mechanisms allow motivation-related weights to adjust during an agent's lifetime based on behavioral outcomes and internal state regulation. Second, evolutionary selection operates across generations via a single-lineage search: at each generation a candidate genome is produced by mutation, evaluated over multiple stochastic rollouts, and accepted only if mean fitness improves. Together, these mechanisms enable the discovery of behavioral regulation parameters through adaptive processes rather than manual specification.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Grid World Environment}
+
+The simulation environment consists of a 2D discrete grid where spatial relationships govern agent interactions. Each cell can contain agents, resources, threats, or remain empty. The environment implements:
+
+\begin{itemize}
+    \item \textbf{Spatial dimensions}: fixed $N \times N$ grid (default $15\times15$ in experiments)
+    \item \textbf{Resources}: food items spawn periodically at random empty cells (controlled by a spawn interval)
+    \item \textbf{Threats}: mobile threat agents that patrol/chase and can cause child injury upon close contact
+\end{itemize}
+
+\subsubsection{World rules and key numerical constants}
+Table~\ref{tab:world_magic_numbers} summarizes the primary constants used in the current code implementation (state bounds, per-tick dynamics, and basic world timing). These are the values that set the time scales in the experiments and in the final presentation.
+
+\begin{table}[H]
+\centering
+\caption{Key numerical constants and world rules (implementation)}
+\label{tab:world_magic_numbers}
+\renewcommand{\arraystretch}{1.08}
+\begin{tabularx}{\linewidth}{@{} l l X @{}}
+\toprule
+Symbol / name & Value & Meaning in code \\
+\midrule
+$X_{\max}$ & $100$ & Clamp range for mother/child internal states \\
+Day length & $100$ ticks & One day is defined as 100 ticks (time indexing) \\
+Child hunger increment & $+0.5$/tick & Hunger increases linearly over time \\
+Child warmth decrement & $-0.5$/tick & Warmth drops linearly over time (cold world) \\
+Child injury recovery & $0.5$/tick & Injury recovers only when threats are far \\
+Threat recovery radius & $0.2\cdot\max(W,H)$ (min 1) & ``Threats are far'' condition for injury recovery \\
+Basal metabolism & $-0.2$ energy/tick & Mother energy decreases every tick even if idle \\
+Move cost & $-0.3$ energy, $+0.5$ fatigue & Cost applied when mother moves \\
+Action cost & $-0.1$ energy, $+0.1$ fatigue & Cost applied when mother acts (non-move) \\
+Rest recovery & $-4.0$ fatigue/tick & Fast fatigue recovery when resting \\
+Idle recovery & $-1.0$ fatigue/tick & Moderate fatigue recovery when idle \\
+Threat perception range & $2$ cells & Threat switches mode based on local perception \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+    \input{diagram/grid_world}
+
+The simulation environment contains three agent types and one non-agent 
+entity, each contributing distinct functional roles within the grid-world 
+ecosystem.
+
+\textbf{Mother Agent}: The mother agent implements the full neuroendocrine 
+decision architecture described before. 
+It possesses complete perception of relevant environmental cues within a 
+specified perception radius, including nearby food resources, threats, and 
+child need variables. Based on perceived stimuli and internal 
+physiological and neuroendocrine states, the mother evaluates competing 
+motivations such as caregiving, protection, and self-maintenance. The 
+selected action may include approaching the child, feeding, warming, 
+protecting, avoiding threats, or foraging for resources.
+
+
+
+\textbf{Child Agent}: The child agent represents a simplified infant model 
+with limited perception and no independent mobility. Instead of performing 
+complex actions, the child maintains internal physiological states including 
+hunger, warmth deviation, and injury level. When these internal deficits 
+increase, they influence the mother’s internal regulation and motivational computation. The child therefore functions primarily as a passive vulnerable entity whose survival depends on maternal behavior and environmental conditions.
+
+\textbf{Threat Agent}: Threat agents represent mobile environmental hazards. 
+Each threat follows a random patrol movement pattern within the grid-world. 
+Threat agents possess a limited perception radius and modify their behavior 
+based on perceived agents. When a threat detects a child agent within its 
+perception range, it switches from patrol to pursuit and attempts to move 
+toward the child. Conversely, if the threat detects the mother agent, it 
+switches to avoidance behavior and attempts to move away from the mother. 
+This asymmetric interaction creates dynamic environmental pressure that 
+requires protective maternal responses.
+
+\textbf{Food Entity}: Food entities are passive environmental resources placed 
+within the environment. When collected by the mother agent, food replenishes 
+maternal energy reserves and helps maintain physiological homeostasis. Food 
+entities do not exhibit autonomous behavior and serve only as consumable 
+resources.
+
+
+% \subsection{Multi-Family Dynamics}
+
+% The model supports multiple family units coexisting within the shared environment. Each family consists of one mother and one helpless offspring, with territories that may overlap at boundaries creating interaction zones.
+
+% \input{diagram/multiple_family}
+
+
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% ----------------------------------------------------------
+\section{Multi-Agent System (MAS) Formulation}
+% ----------------------------------------------------------
+
+The simulation environment is modeled as a multi-agent system consisting of
+a set of interacting agents embedded in a shared spatial environment.
+
+\[
+\mathcal{N} = \{ a_1, a_2, \dots, a_K \}.
+\]
+
+Each agent \(a_i\) is defined as:
+
+\[
+a_i =
+\langle
+G_i,\;
+S_i,\;
+P_i,\;
+H_i,\;
+M_i,\;
+\pi_i,\;
+A_i
+\rangle
+\]
+
+where
+
+\begin{itemize}
+\item \(G_i\) : genetic trait vector inherited across generations
+\item \(S_i\) : internal physiological state space
+\item \(P_i\) : perception function mapping environment to observations
+\item \(H_i\) : neuroendocrine update mechanism
+\item \(M_i\) : motivational computation
+\item \(\pi_i\) : behavioral policy selecting an action
+\item \(A_i\) : action space
+\end{itemize}
+
+The environment is represented by
+
+\[
+E(t) =
+\langle
+\text{agents},
+\text{resources},
+\text{threats},
+\text{spatial grid}
+\rangle .
+\]
+
+At each discrete time step \(t\), agent behavior follows a perception–
+regulation–action cycle.
+
+\[
+\begin{aligned}
+o_i(t) &= P_i(E(t)) \\
+s_i(t) &= S_i(t) \\
+h_i(t) &= H_i(s_i(t),\, o_i(t),\, G_i) \\
+m_i(t) &= M_i(s_i(t),\, h_i(t),\, o_i(t),\, G_i) \\
+a_i(t) &= \pi_i(m_i(t),\, s_i(t),\, o_i(t)) \\
+s_i(t+1) &= f_i(s_i(t),\, h_i(t),\, a_i(t)) \\
+E(t+1) &= g(E(t),\, a_1(t),\dots,a_K(t))
+\end{aligned}
+\]
+
+The perception function \(P_i\) extracts environmental cues such as nearby
+child-need cues, food resources, and threats. These observations influence
+the agent’s physiological and neuroendocrine states.
+
+The neuroendocrine update mechanism \(H_i\) models simplified hormone-like dynamics
+(oxytocin and cortisol) which regulate bonding, stress response, and motivational priorities.
+
+Motivational values \(m_i(t)\) are computed through the integration of
+physiological deficits, hormonal signals, and environmental observations.
+The policy function \(\pi_i\) selects the behavior with the highest
+motivational activation.
+
+Finally, the environment transition function \(g\) updates spatial
+conditions and resource distributions according to all executed actions.
+
+This perception–internal regulation–action loop forms the core behavioral
+mechanism of the agents.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+% Uncomment after: sudo apt install texlive-science
+% \input{algorithm/Update_cycle}
+
+
+
+% ----------------------------------------------------------
+\section{Internal State Spaces of Agents}
+% ---------------------------------------------------------
+\subsection{Mother Agent}
+
+The mother agent implements the full neuroendocrine architecture:
+
+\[
+a_m =
+\langle
+G_m,\;
+S_m^{phys},\;
+S_m^{psych}
+P_m,\;
+H_m,\;
+M_m,\;
+\pi_m,\;
+A_m
+\rangle
+\]
+
+where
+
+\[
+S_m^{phys} =
+\{\text{energy},\text{fatigue}\}
+\]
+
+\[
+S_m^{psych} =
+\{\text{closeness-child},\text{bonding},\text{fear-threat},\text{stress}\}
+\]
+
+\[
+H_m =
+\{\text{oxytocin},\text{cortisol}\}
+\]
+
+\[
+M_m =
+\{
+M_{\text{care}},
+M_{\text{protect}},
+M_{\text{forage}},
+M_{\text{self}}
+\}
+\]
+
+
+\[
+A_m =
+\{
+\text{Move/Stay},\ \allowbreak
+\text{Eat},\ \allowbreak
+\text{Feed child},\ \allowbreak
+\text{Care (proximity-based)},\ \allowbreak
+\text{Protect (proximity-based)}
+\}
+\]
+
+The mother agent evaluates environmental cues, hormonal states,
+and physiological deficits in order to regulate caregiving,
+protection, and self-maintenance behaviors.
+
+\subsubsection{World time and update loop (implementation)}
+The simulation advances in discrete ticks. One tick corresponds to one full update loop (perception $\rightarrow$ internal updates $\rightarrow$ action selection $\rightarrow$ world transition). In the default configuration, one day is defined as 100 ticks. Food spawning uses a fixed interval (explicitly configured in experiments), and threats are represented as explicit threat agents.
+
+\subsubsection{Physiological state dynamics (mother)}
+Maternal energy decreases each tick due to basal metabolism and may decrease further due to movement and actions; energy increases when the mother eats. Fatigue accumulates with movement/actions and recovers when resting or idling. These quantities are clamped to $[0,100]$.
+
+\subsubsection{Hormonal and psychological meaning (mother)}
+Oxytocin is a proximity-driven bonding modulator (higher when the mother stays close to the child). Cortisol is a stress modulator driven by threat proximity, child need, and maternal energy deficit. Psychological states include closeness to child (inverse distance), bonding strength, fear in response to threats, and overall stress load.
+
+
+
+
+\subsection{Child Agent}
+
+Child agents implement a simplified regulatory system.
+
+\[
+a_c =
+\langle
+G_c,\;
+S_c,\;
+P_c,\;
+\rangle
+\]
+
+Child internal states consist primarily of need variables:
+
+\[
+S_c =
+\{\text{hunger},\text{warmth},\text{injury}\}
+\]
+
+The child agent has no independent mobility in the evaluated setting. Child needs are represented by state variables (hunger, warmth, injury) that the mother uses as inputs when computing motivation scores.
+
+\subsubsection{Baseline child dynamics without maternal interaction}
+All child state variables are clamped to $[0,100]$. Hunger increases by $+0.5$ per tick from an initial value of 0. Warmth decreases by $-0.5$ per tick from an initial value of 50 (comfortable). Injury increases only via threat contact events and recovers when threats are far. Without any maternal interaction, the child reaches lethal cold in approximately 100 ticks (warmth $50 \rightarrow 0$), which is faster than starvation (hunger $0 \rightarrow 100$ in 200 ticks).
+
+
+
+
+
+
+% ----------------------------------------------------------
+\subsection{Action Spaces}
+% ----------------------------------------------------------
+
+\paragraph{Mother Agent.}
+\[
+A_m = \{
+\text{move},\ 
+\text{stay},\
+\text{care},\
+\text{pick food},\
+\text{eat},\
+\text{give to child}
+\}.
+\]
+
+\paragraph{Child Agent.}
+No action just signals.
+
+\paragraph{Threat Agent.}
+\[
+A_{\text{threat}} = \{
+\text{Move},\ 
+\text{emit danger to child}
+\}.
+\]
+
+
+
+
+
+\section{Neuroendocrine Regulation}
+
+The internal neuroendocrine states of the mother agent evolve over discrete
+time steps according to stimulus-driven regulatory dynamics. Each hormone
+represents a simplified computational analogue of biological signaling
+systems involved in maternal behavior.
+
+Let \(H^{(k)}(t)\) denote the level of hormone \(k\) at time step \(t\),
+where
+
+\[
+k \in \{\mathrm{OT}, \mathrm{C}\}.
+\]
+
+Hormonal dynamics follow a discrete update rule:
+
+\[
+H^{(k)}(t+1)
+=
+H^{(k)}(t)
++
+\alpha_k \, S^{(k)}(t)
+-
+\lambda_k H^{(k)}(t)
+\]
+
+where
+
+\begin{itemize}
+\item \(S^{(k)}(t)\) is the stimulus input derived from perception
+\item \(\alpha_k\) is a stimulus sensitivity parameter
+\item \(\lambda_k\) is a decay constant
+\end{itemize}
+
+Stimulus inputs depend on environmental cues and internal physiological
+states perceived by the mother agent. For example:
+
+\[
+S^{(OT)}(t) = f(d_c(t))
+\]
+
+where \(d_c\) is the distance between the mother and the child.
+
+Similarly, cortisol dynamics depend on threat perception and physiological
+stress:
+
+\[
+S^{(C)}(t) =
+w_1 \, S_{threat}(t)
++
+w_2 \, D_{child}(t)
++
+w_3 \, D_{energy}(t)
+\]
+
+where
+
+\begin{itemize}
+\item \(S_{threat}(t)\) is perceived threat intensity
+\item \(D_{child}(t)\) represents \emph{child-need signals} derived from the child state variables (hunger, warmth, injury) that are directly observed by the mother
+\item \(D_{energy}(t)\) represents maternal energy deficit
+\end{itemize}
+
+Hormone levels are constrained within the normalized range
+
+\[
+H^{(k)}(t) \in [0,1].
+\]
+
+
+Maternal bonding strength is influenced by oxytocin and cortisol
+levels according to
+
+\begin{equation}
+MB(t)
+=
+MB(t-1)
++
+\beta_1 OT(t)
+-
+\beta_2 CORT(t)
+-
+\delta_r
+\end{equation}
+
+where \(MB\) denotes maternal bonding strength and \(\delta_r\) is a
+natural decay rate representing weakening attachment in the absence
+of reinforcing interaction.
+
+
+Hormonal states influence motivational priorities by modulating the
+activation level of competing behavioral drives.
+
+\[
+M_j(t)
+=
+\sum_i
+u_{ji} \, x_i(t)
+\]
+
+where
+
+\begin{itemize}
+\item \(M_j(t)\) is the activation of motivation \(j\)
+\item \(x_i(t)\) are physiological or hormonal signals
+\item \(u_{ji}\) are motivational weights
+\end{itemize}
+
+The selected behavior corresponds to the maximum activation:
+
+\[
+a(t) = \arg\max_j M_j(t)
+\]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section{Evolutionary Mechanisms}
+    \input{diagram/evo}
+    \input{algorithm/evo}
+
+\subsection{Darwinian vs.\ Baldwinian in this thesis}
+We use the terms \textbf{Darwinian} and \textbf{Baldwinian} to distinguish two time scales of adaptation. Darwinian evolution refers to inherited fixed weights mutating across generations and being selected when they improve fitness. Baldwinian adaptation refers to within-lifetime plasticity that can improve behavior during an episode, even though plastic weight changes are not directly inherited. In our implementation, inheritance applies to fixed weights, while plastic weights reset each episode and only influence the effective policy within that lifetime.
+
+\subsection{Genetic Encoding}
+
+In the proposed model, each mother agent inherits a set of behavioral
+parameters that regulate both neuroendocrine dynamics and motivational
+decision processes. These parameters correspond to the fixed weights
+used in the agent’s internal regulatory system.
+
+The genome of an agent is therefore represented as
+
+\[
+G =
+\{U^{\text{fixed}}\}
+\]
+
+where
+
+\begin{itemize}
+\item $U^{\text{fixed}}$ represents inherited motivation weights that map internal signals (child need, energy deficit, fear/stress, bonding/closeness) into four competing motivations (Forage, Care, Self, Protect).
+\end{itemize}
+
+The motivational weight matrix
+
+\[
+U^{\text{fixed}}
+\]
+
+determines how physiological deficits and neuroendocrine signals
+contribute to the activation of competing behavioral motivations.
+
+During the lifetime of an agent, plastic adaptation modifies separate
+plastic weight matrices
+
+\[
+U^{\text{plastic}}
+\]
+
+which allow behavioral responses to adjust through experience while
+preserving the inherited genetic baseline.
+
+The effective behavioral parameters used by the agent are computed as
+
+\[
+U = \frac{U^{\text{fixed}} + U^{\text{plastic}}}{2}
+\]
+
+This formulation allows behavior to be shaped by both evolutionary
+inheritance and lifetime learning.
+
+
+\subsection{Genetic Mutation}
+
+During reproduction, each inherited parameter may undergo mutation
+with a small probability.
+
+For a genetic parameter $g \in G$, mutation is applied as
+
+\[
+g' = g + \epsilon
+\]
+
+where
+
+\[
+\epsilon \sim \mathcal{N}(0, \sigma^2).
+\]
+
+The resulting value is clipped to the valid range
+
+\[
+g' \in [0.05, 1.0].
+\]
+
+This mutation mechanism allows the evolutionary process to explore
+new behavioral strategies across generations.
+
+
+
+
+
+
+\subsection{Fitness Function}
+
+Each candidate genome is evaluated over $N$ stochastic rollouts (different random seeds) under fixed environment settings. Fitness rewards longer survival (normalized time-to-death, TTD) for child and mother, with a small penalty for child injury at episode end:
+
+\begin{equation}
+F = \alpha \,\mathrm{TTD}_{\text{child}} + (1-\alpha)\,\mathrm{TTD}_{\text{mother}} - \lambda \,\mathrm{Injury}_{\text{child}}
+\label{eq:fitness}
+\end{equation}
+
+where $\mathrm{TTD}_{\cdot}\in[0,1]$ is death tick divided by episode horizon, $\mathrm{Injury}_{\text{child}}$ is mean final child injury (0--100, scaled in implementation), $\alpha$ is a configurable weight on child survival (default $\alpha=0.5$ in this thesis), and $\lambda=0.002$ discourages high-injury strategies. Evolution uses a $(1{+}1)$-style rule: propose one mutated genome, accept only if mean fitness across rollouts improves.
+
+
+
+
+\section{Simulation Scenarios and Experimental Design}
+
+This section describes how the proposed neuroendocrine-driven agents are evaluated through controlled simulation scenarios. The goal is to verify that the internal mechanisms (perception, physiological regulation, neuroendocrine dynamics, and motivational competition) produce coherent, emergent behaviors at the agent and multi-agent levels.
+
+\subsection{Environmental Parameters}
+
+We vary environment difficulty along two axes that are directly implemented in the code and used in experiments: food availability (food spawn interval) and predation pressure (number of threats). These parameters control the trade-off between foraging, caregiving, and protection under limited resources and risk.
+
+\begin{table}[H]
+\centering
+\caption{Environmental parameter space}
+\begin{tabular}{lll}
+\toprule
+Parameter & Levels & Values \\ 
+\midrule
+Food interval & 3 & \{5, 15, 25\} ticks between food spawns \\
+World difficulty & 3 & \{easy, normal, hard\} implemented as \{0, 1, 2\} threats \\
+\bottomrule
+\end{tabular}
+\label{tab:parameters}
+\end{table}
+
+These settings allow us to evaluate:
+\begin{itemize}
+    \item resource pressure on maternal foraging behavior,
+    \item threat pressure on protective motivation and injury outcomes,
+    \item robustness to distribution shift by transferring evolved genomes to unseen combinations (E4).
+\end{itemize}
+
+% \subsection{Day cycle (time indexing)}
+
+% The world defines a day length (\texttt{day\_step}) and a derived \texttt{is\_day} flag. In the current implementation this is primarily used for consistent time indexing and for setting a default food spawn interval when an explicit interval is not provided. The experiments reported in this thesis treat food spawn interval and number of threats as the main environment difficulty controls.
+
+% \subsection{Scenario Tests}
+
+% In addition to environmental variation, we design controlled scenarios to 
+% directly test the correctness of the internal neuroendocrine mechanism. 
+
+% \paragraph{Scenario 1: Mechanism Behavior Verification.}
+% A base case with a single mother, one child, one food source, and one 
+% threat. The objective is to confirm that the agent’s behavior arises 
+% \emph{directly from the perception $\rightarrow$ internal state $\rightarrow$ 
+% action mechanism} without any engineered rules.
+
+% \paragraph{Scenario 2: Bonding Behavior.}
+% A system with two agents (mother + child), multiple food items, and a 
+% single threat. This scenario tests whether maternal bonding, 
+% comfort-seeking, and distress regulation emerge naturally from the 
+% neuroendocrine dynamics.
+
+% \paragraph{Scenario 3: Multi-Family Interaction.}
+% A larger setting with $A$ mothers, $B$ children, multiple food items, and 
+% multiple threats. This scenario is included as a conceptual stress-test for future work (multi-family overlap, potential helping vs.\ competition), but is not part of the primary evaluation results reported in this thesis.\\
+
+In this thesis, the primary evaluated setting is the dyadic mother--child scenario; multi-family interaction is discussed as a future extension for studying kinship, alloparental care, and population structure effects.
+
+\subsection{Experimental questions (aligned with the final presentation)}
+The experimental program is organized around four questions:
+\begin{enumerate}
+    \item \textbf{What does ``maternal behavior'' look like in this world?} We operationalize maternal behavior via survival (TTD), state regulation trajectories, and need-conditional action selection such as $P(\text{Forage}\mid\text{hungry})$, $P(\text{Care}\mid\text{cold})$, and $P(\text{Protect}\mid\text{injured})$.
+    \item \textbf{Role of plasticity and the Baldwin effect.} We test whether lifetime plasticity improves the speed or quality of adaptation by comparing evolution-only (E2) to outcome-based plasticity regimes. In \textbf{P1}, outcome-based plastic updates are active during evolution and use an adaptive learning rate scaled by deficit size; in \textbf{P2}, the same outcome-based update rule uses a fixed learning rate and is applied at evaluation time on the evolved genome. This matches the Baldwinian hypothesis that learning can guide evolution without learned changes being directly inherited.
+    \item \textbf{Effect of initial maternal traits.} We compare three weight initialization regimes (anti-maternal, random-uniform, pro-maternal) and quantify how priors shape evolutionary trajectories and final behaviors under identical selection pressure.
+    \item \textbf{Generalization to unseen environments.} We evaluate transfer to unseen combinations of world difficulty and food availability (E4, a $3\times 3$ grid of threat count $\times$ food interval) and summarize structured failure modes (e.g., hunger vs.\ cold vs.\ injury deaths).
+\end{enumerate}
+
+
+
+
+
+% \newpage

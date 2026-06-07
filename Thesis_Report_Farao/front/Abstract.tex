@@ -1,0 +1,39 @@
+% =========================
+% English Abstract
+% =========================
+\newpage
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
+
+\begin{table}[h]
+    \begin{tabular}{l l}
+        Thesis Title   & Simulation of Maternal Instinct \\
+        Thesis Credits & 8 \\
+        Candidate      & Mr.\ Napat Aeimwiratchai \\
+        Thesis Advisor & Mr.\ Bawornsak Sakulkueakulsuk \\
+        Program        & Bachelor of Engineering \\
+        Field of Study & Robotics and Automation \\
+        Department     & Robotics and Automation \\
+        Faculty        & Institute of Field Robotics \\
+        Academic Year  & 2025 \\
+    \end{tabular}
+\end{table}
+
+Maternal care is a foundational form of altruism, yet the mechanisms by which prosocial strategies emerge and persist in artificial systems remain unclear.
+This thesis presents a computational framework that couples a neuroendocrine-inspired controller with evolutionary agent-based modeling to study how caregiving-like behavior can emerge in a minimal dyadic setting.
+Building on evidence for oxytocin- and cortisol-like modulation of social bonding and stress responses, we model a mother agent whose perception\,\allowbreak$\to$\,hormone\,\allowbreak$\to$\,motivation cascade produces behavior through weighted motivational competition (Forage, Care, Self, Protect).
+The child agent is passive: it exposes internal need variables (hunger, warmth, injury) that the mother observes and acts on, creating an asymmetric caregiving dynamic without explicit cooperative rewards.
+
+We run spatially explicit simulations in a $15\times15$ grid-world with periodic food spawning (food spawn interval $\in\{5,15,25\}$ ticks; shorter interval = more abundant food) and optional threats.
+Motivation-weight genomes are optimized using a single-lineage $(1{+}1)$ evolutionary search evaluated over 10 stochastic rollouts per candidate, across 3000 generations.
+We compare three plasticity regimes---E2 (genes only), P1 (adaptive-rate outcome plasticity), and P2 (fixed-rate outcome plasticity)---and three motivation-weight initialization priors: \texttt{anti\_maternal}, \texttt{random\_uniform}, and \texttt{pro\_maternal}.
+
+Four experiments are reported:
+(1)~characterizing maternal behavior dynamics in the training ecology;
+(2)~showing that plasticity accelerates evolutionary fitness improvement (Baldwin-compatible pattern);
+(3)~demonstrating that initialization priors shape weight displacement and residual failure modes after 3000 generations; and
+(4)~evaluating generalization to nine unseen world$\times$food cells, showing graded transfer: survival is maintained under abundant food and low threat, but child hunger becomes the dominant failure mode under scarce food (interval~25) and high threat.
+
+The framework bridges descriptive biology and abstract cooperation models, offering mechanistic insight into how minimal neuroendocrine architectures generate adaptive prosocial strategies.\\
+
+\noindent \textbf{Keywords:} maternal behavior, neuroendocrine modulation, evolutionary computation, agent-based modeling, motivation weights, Baldwin effect, bio-inspired AI

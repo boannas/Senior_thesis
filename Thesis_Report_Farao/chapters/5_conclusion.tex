@@ -1,0 +1,127 @@
+\newpage
+\chapter{Conclusion and Discussion}
+\label{chap:conclusion}
+
+This chapter summarizes the four experimental blocks reported in Chapter~\ref{chap:experiments} (Experiment~1--4), relates them to the research questions from Chapter~1, and discusses limitations and future work.
+Food spawn intervals are stated consistently throughout: interval~5 = \emph{abundant} food, interval~15 = \emph{medium} (training/emergence), interval~25 = \emph{scarce} food.
+
+\section{Summary of findings by experiment}
+
+\subsection{Experiment 1: Maternal behavior in the training ecology}
+Experiment~1 asked what ``maternal behavior'' looks like in the normal training world (one threat, food spawn interval~15) before evolution.
+Baseline rollouts showed separated child and mother survival distributions (boxplots) and distinct Kaplan--Meier decay rates across conditions.
+Aggregated episode traces (128 seeds) showed co-survival periods, child hunger/warmth/injury on alive ticks, concurrent use of Forage/Care/Self/Protect, and coupled mother internal states (energy, fatigue, bonding, fear, stress, closeness, OT/CORT).
+\textbf{Conclusion:} the environment and motivational architecture support non-degenerate, state-dependent mother--child dynamics; later experiments can therefore interpret fitness gains as changes in real behavioral regimes rather than artifacts of a trivial simulator.
+
+\subsection{Experiment 2: Plasticity and the Baldwin effect}
+Experiment~2 swept world difficulty (easy/normal/hard) and child-fitness weight $\alpha_{\text{child}}\in\{0.3,0.5,0.7\}$ for E2 (genes only), P1 (outcome-based plasticity, adaptive learning rate, global deficits), and P2 (outcome-based plasticity, fixed learning rate, local deficits).
+Across panels, P1 and P2 reached higher mean fitness earlier than E2, with the largest gaps in normal and hard worlds; within-episode plastic weight updates were strongest in early generations and then flattened while fitness continued to improve.
+The normal-world, $\alpha=0.5$ panel matches the emergence runs in Experiments~3--4.
+\textbf{Conclusion:} lifetime plasticity acts as a \emph{search prior} consistent with a Baldwin-style account---plasticity helps early, inherited motivation weights carry late performance---motivating inclusion of P1/P2 alongside E2 when testing initialization and transfer.
+
+\subsection{Experiment 3: Initial maternal traits and emergence on the seen world}
+Experiment~3 tested whether initialization priors (\texttt{anti\_maternal}, \texttt{random\_uniform}, \texttt{pro\_maternal}) shape evolutionary paths when selection pressure is held fixed (30 seeds, 3000 generations, training world).
+
+\paragraph{Genome change.}
+Population $L_2$ drift from generation-0 weights (mean $\pm$ SEM over 30 lineages) was ordered anti $>$ random $>$ pro for all plasticities---priors set how far selection must move the genome.
+Exemplar checkpoint heatmaps (one seed per init) illustrated the mechanism: anti lineages reorganize Care/Protect leaves from low to high; pro lineages start near maternal profiles and change little.
+Final pro-minus-anti weight maps showed \emph{partial} convergence (several leaves still differ) rather than identical endpoints.
+
+\paragraph{Outcomes and behavior.}
+Child normalized TTD improved from early to emergent stages for all inits/plasticities (relative to passive and strong-active reference bands).
+Conditional probabilities $P(\text{Forage}\mid\text{hungry})$, $P(\text{Care}\mid\text{cold})$, and $P(\text{Protect}\mid\text{injured})$ rose toward need-appropriate switching---maternal-like policies can be \emph{selected into} anti-maternal genomes.
+
+\paragraph{Failure modes on the training-matched evaluation (normal, food interval~15).}
+Post-evolution rollouts on the \emph{seen} ecology (not the full E4 grid) showed that hunger remained the dominant child failure for anti-maternal and random-uniform genomes, while pro-maternal genomes had more balanced alive/cold/injury outcomes.
+Initialization therefore affects both \emph{how} evolution proceeds and \emph{which} residual failure channel remains after 3000 generations.
+
+\textbf{Conclusion:} H1 is supported (anti shifts most, pro least); partial behavioral convergence occurs, but init signatures persist in weights and death-cause mixtures on the training world.
+
+\subsection{Experiment 4: Generalization (E4 transfer grid)}
+Experiment~4 evaluated final genomes on nine held-out cells: world $\times$ food interval $\{5,15,25\}$ with 10 rollouts per genome per cell.
+
+Transfer was \textbf{graded}, not all-or-none.
+Easy worlds and abundant food (interval~5) yielded high child survival and frequent ``alive'' plurality outcomes in the per-cell death-cause tiles.
+Hard worlds and scarce food (interval~25) produced sharp drops in child TTD and hunger-dominated tiles, especially for anti-maternal genomes.
+Normal-world cells at medium food (interval~15, training-matched) still showed substantial hunger for anti-maternal inits---performance on the training cell does not imply robustness to scarcer food or harder threats.
+Pooled nine-cell death summaries integrated $9\times 10=90$ rollouts per seed and confirmed the same init/plasticity ordering at a global level: more alive mass for pro-maternal, more hunger for anti-maternal.
+
+\textbf{Conclusion:} evolved policies adapt to the \emph{niche} shaped by emergence (normal threats, interval~15); they generalize to easier transfer corners but fail predictably when threat pressure and food scarcity (interval~25) exceed training.
+
+\section{Answers to the research questions}
+
+Table~\ref{tab:rq_answers} maps the supporting questions from Chapter~1 to the experimental evidence.
+
+\begin{table}[H]
+  \centering
+  \caption{Research questions and corresponding findings (Chapters~\ref{chap:experiments}--\ref{chap:conclusion}).}
+  \label{tab:rq_answers}
+  \small
+  \begin{tabular}{p{0.44\linewidth}p{0.48\linewidth}}
+    \toprule
+    \textbf{Question theme} & \textbf{Finding} \\
+    \midrule
+    Internal states and hormones modulate behavior? &
+    Exp~1 traces: OT/CORT, bonding, fear co-vary with motivations and survival; Exp~3 conditional $P(\text{sel}\mid\text{need})$ rises under selection. \\
+    Food and threats reshape Forage/Care/Self/Protect? &
+    Exp~4: abundant food (5) vs.\ scarce (25) and easy vs.\ hard worlds shift survival and death causes; hunger dominates harsh/scarce cells. \\
+    Generalization to unseen conditions? &
+    Partial (Exp~4): good on easy+abundant; poor on hard+scarce; training cell $\neq$ full grid. \\
+    Anti/random/pro improve under selection? &
+    Yes (Exp~3): TTD and conditional care improve; anti requires largest weight drift. \\
+    E2 vs.\ P1 vs.\ P2? &
+    Exp~2: P1/P2 faster fitness rise; Exp~3--4: plasticity modulates outcomes but init ordering often persists. \\
+    Minimal computational abstraction? &
+    $(1{+}1)$ evolution of 13 motivation weights + internal states + argmax motivations suffices for emergent care-like switching (with limits below). \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The \textbf{central question}---whether prosocial maternal behavior can arise without hand-crafted cooperative rewards---is answered \emph{qualified yes} within this dyadic grid world: behavior is not programmed as ``always care,'' but emerges from motivational competition, internal regulation, and selection on child/mother survival.
+Outside the training niche, that emergence is incomplete.
+
+\section{Mechanistic interpretation}
+
+Three mechanisms jointly explain the figure patterns.
+
+\paragraph{Motivational competition.}
+At each tick the mother selects the highest activated motivation among Forage, Care, Self, and Protect.
+Need-appropriate switching appears in Exp~3 as rising $P(\text{Care}\mid\text{cold})$ and $P(\text{Protect}\mid\text{injured})$ rather than a single frozen action.
+
+\paragraph{Internal regulation.}
+Energy, fatigue, bonding, fear, stress, and hormone-like signals (OT/CORT) provide context for those activations (Exp~1).
+They offer an interpretable account of \emph{why} weight changes alter behavior, not only that fitness increases.
+
+\paragraph{Evolution and plasticity.}
+Inherited weights evolve by $(1{+}1)$ search: Gaussian mutation, $N{=}10$ rollout evaluation, accept if mean fitness improves.
+Plasticity (P1/P2) changes the \emph{rate} of fitness improvement (Exp~2); initialization changes the \emph{path length} in weight space (Exp~3).
+Neither removes environmental limits on transfer (Exp~4).
+
+\section{Limitations}
+
+\begin{itemize}
+    \item \textbf{Expressivity}: evolution tunes 13 scalar motivation weights, not policies for navigation or threat avoidance; the child is passive (no signaling genome).
+    \item \textbf{Single-lineage search}: no population-based GA; results describe hill-climbing with stochastic evaluation noise, not global optima.
+    \item \textbf{Fixed training niche}: emergence uses one world (normal, interval~15); E4 tests transfer but does not co-evolve environments.
+    \item \textbf{Fitness weighting}: $\alpha_{\text{child}}$ and $\lambda$ fix the child--mother--injury trade-off; the Exp~2 sweep shows conclusions depend on $\alpha$.
+    \item \textbf{Stochastic evaluation}: 10 rollouts per candidate and per post-hoc eval; death-cause tiles pool 300 episodes per cell---rare outcomes may be under-sampled.
+    \item \textbf{Exemplar heatmaps}: Figure~\ref{fig:exp3_weight_transition} in Chapter~\ref{chap:experiments} shows one seed per init; population claims rely on the 30-seed aggregates.
+\end{itemize}
+
+\section{Future directions}
+
+\begin{itemize}
+    \item \textbf{Statistical rigor}: bootstrap CIs on median TTD, per-tile tests on death-cause rates, and explicit comparison of P1 vs.\ P2 beyond visual curves.
+    \item \textbf{Replicate exemplars}: checkpoint heatmaps for all 30 seeds or a small stratified sample to separate init effects from seed noise.
+    \item \textbf{Richer ecology}: variable grid size, mobile threats, partial observability, and child signaling genomes.
+    \item \textbf{Population evolution}: multi-lineage or spatially structured groups to study kin selection and alloparental care.
+    \item \textbf{Curriculum training}: train across the E4 grid (or a curriculum from abundant to scarce food) and re-test whether hunger collapse on interval~25 diminishes.
+    \item \textbf{Seen-world baselines}: systematic collection of final-policy rollouts on the training ecology (not only transfer-grid evaluations) to separate training-matched evaluation from out-of-distribution transfer in one pipeline.
+\end{itemize}
+
+\section{Closing remarks}
+
+Taken together, the four experiments show that maternal-like behavior---need-conditional motivations, improved child survival under selection, and structured failure modes in harsh ecologies---can emerge from a compact biologically inspired architecture without a hand-written ``care'' reward.
+Plasticity accelerates this process; initialization shapes its trajectory; and generalization remains the primary bottleneck when food is scarce (interval~25) and threats are high.
+For the broader motivation of the thesis (intrinsic prosocial motivation in artificial agents), the results support \emph{evolutionary emergence in a controlled niche} rather than \emph{universal robust care}.
+Extending environment diversity, evaluation rigor, and representational richness are the natural next steps toward claims that would apply outside the laboratory grid.

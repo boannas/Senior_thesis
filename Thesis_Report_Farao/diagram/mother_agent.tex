@@ -1,0 +1,75 @@
+\begin{figure}[htbp]
+\centering
+\begin{adjustbox}{max width=0.9\textwidth, max height=0.9\textheight}
+\begin{tikzpicture}[node distance=1.8cm, scale=0.9, every node/.style={scale=0.9},
+    process/.style={rectangle, rounded corners, draw=black, thick, align=center, minimum height=0.8cm, font=\bfseries},
+    subbox/.style={rectangle, rounded corners, draw=black!40, fill=gray!10, text width=7cm, align=left, font=\small},
+    arrow/.style={->, thick, >=stealth'}
+]
+
+% --- Main title ---
+\node (title) [process, minimum width=8cm, fill=blockblue!30] {Mother Agent Architecture};
+
+% --- Genome ---
+\node (genome) [process, below=1cm of title, minimum width=7cm, fill=blockgreen!20] {Genome (Inherited)};
+\node (genomecontent) [subbox, below=0.3cm of genome] {
+\textbullet~\textbf{altruism\_level} $\in [0.0,1.0]$\\
+\textbullet~\textbf{kin\_bias} $\in [0.0,1.0]$\\
+\textbullet~\textbf{nurture\_threshold} $\in [0.0,1.0]$\\
+\textbullet~\textbf{threat\_sensitivity} $\in [0.0,1.0]$
+};
+
+% --- Internal state ---
+\node (state) [process, below=1cm of genomecontent, minimum width=7cm, fill=blockorange!20] {Internal State};
+\node (statecontent) [subbox, below=0.3cm of state] {
+\textbullet~energy\_level [0--100]\\
+\textbullet~stress\_level [0--100]\\
+\textbullet~child\_id (reference)\\
+\textbullet~position $(x, y)$
+};
+
+% --- Perception ---
+\node (perception) [process, below=1cm of statecontent, minimum width=7cm, fill=blockpurple!20] {Perception Module};
+\node (perceptioncontent) [subbox, below=0.3cm of perception] {
+\textbullet~Detect nearby children\\
+\textbullet~Identify own child\\
+\textbullet~Assess child health\\
+\textbullet~Sense resource availability
+};
+
+% --- Decision ---
+\node (decision) [process, below=1cm of perceptioncontent, minimum width=7cm, fill=blockred!20] {Decision-Making Circuit};
+\node (decisioncontent) [subbox, below=0.3cm of decision] {
+\textbf{If} energy $<$ threshold $\Rightarrow$ ACTION = rest/forage\\[0.2cm]
+\textbf{Else:}\\
+\hspace*{0.5cm}• Calculate action probabilities\\
+\hspace*{0.5cm}• Select optimal action
+};
+
+% --- Action execution ---
+\node (actions) [process, below=1cm of decisioncontent, minimum width=7cm, fill=blockblue!20] {Action Execution};
+\node (actionscontent) [subbox, below=0.3cm of actions] {
+\textbullet~FEED\_OWN\_CHILD\\
+\textbullet~FEED\_OTHER\_CHILD\\
+\textbullet~FORAGE\\
+\textbullet~REST\\
+\textbullet~DEFEND (optional)
+};
+
+% --- Arrows ---
+\draw [arrow] (title) -- (genome);
+\draw [arrow] (genome) -- (genomecontent);
+\draw [arrow] (genomecontent) -- (state);
+\draw [arrow] (state) -- (statecontent);
+\draw [arrow] (statecontent) -- (perception);
+\draw [arrow] (perception) -- (perceptioncontent);
+\draw [arrow] (perceptioncontent) -- (decision);
+\draw [arrow] (decision) -- (decisioncontent);
+\draw [arrow] (decisioncontent) -- (actions);
+\draw [arrow] (actions) -- (actionscontent);
+
+\end{tikzpicture}
+\end{adjustbox}
+\caption{Mother agent internal architecture showing the flow from genetic encoding through perception and decision-making to action execution.}
+\label{fig:mother-agent}
+\end{figure}

@@ -1,0 +1,40 @@
+\chapter*{List of Technical Vocabulary and Abbreviations}
+\addcontentsline{toc}{chapter}{List of Technical Vocabulary and Abbreviations}
+
+\setlength{\tabcolsep}{4pt}
+\renewcommand{\arraystretch}{1.05}
+\footnotesize
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.6cm} >{\centering\arraybackslash}p{0.6cm} >{\raggedright\arraybackslash}X}
+\textbf{Term / Abbreviation} & & \textbf{Definition} \\[0.5cm]
+
+ABM      & = & Agent-Based Model \\
+AI       & = & Artificial Intelligence \\
+CORT     & = & Cortisol-like modulator (stress/threat signal in the model) \\
+E2       & = & Evolution-only plasticity regime; only the genome is updated, no within-lifetime weight adjustment \\
+Exp1     & = & Experiment 1: characterization of maternal behavior in training ecology \\
+Exp2     & = & Experiment 2: comparison of plasticity regimes (Baldwin effect) \\
+Exp3     & = & Experiment 3: effect of motivation-weight initialization priors \\
+Exp4     & = & Experiment 4: generalization to unseen food and threat conditions \\
+IQR      & = & Interquartile Range (Q3 $-$ Q1); used as spread measure for skewed distributions \\
+LR       & = & Learning Rate; controls magnitude of within-lifetime weight updates \\
+OT       & = & Oxytocin-like modulator (bonding/affiliation signal in the model) \\
+P1       & = & Plasticity regime 1: adaptive learning rate, global deficit signal \\
+P2       & = & Plasticity regime 2: fixed learning rate, local (per-action) deficit signal \\
+SEM      & = & Standard Error of the Mean; $\text{SEM} = \sigma / \sqrt{N}$ \\
+TTD      & = & Time-To-Death; the simulation tick at which an agent dies, normalized by episode length \\
+
+\multicolumn{3}{l}{\vspace{0.3cm}\textit{Behavioral actions (mother)}} \\[0.3cm]
+
+Care     & = & Maternal care action: attending to the child's needs (warmth, injury) \\
+Forage   & = & Foraging action: moving to collect food for the mother or child \\
+Protect  & = & Protective action: moving to intercept threats approaching the child \\
+Self     & = & Self-maintenance action: resting or satisfying the mother's own energy needs \\
+
+\multicolumn{3}{l}{\vspace{0.3cm}\textit{Initialization regimes (Exp3)}} \\[0.3cm]
+
+anti\_maternal   & = & Initial genome biased away from Care and Protect (low maternal weights) \\
+random\_uniform  & = & Initial genome drawn uniformly at random \\
+pro\_maternal    & = & Initial genome biased toward Care and Protect (high maternal weights) \\
+
+\end{tabularx}
+\normalsize

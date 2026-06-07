@@ -1,0 +1,113 @@
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=1.2]
+% Grid World Environment
+\draw[step=1cm,gray,very thin] (0,0) grid (12,8);
+\draw[thick] (0,0) rectangle (12,8);
+
+% Generation Counter
+\node[rectangle,draw=black,fill=yellow!20,thick,font=\small\bfseries] at (10.5,8.5) {Gen: 50/1000};
+
+% ===== FAMILY 1 (Top Left) =====
+% Mother 1
+% \node[circle,draw=red!70,fill=red!30,thick,minimum size=0.5cm,drop shadow] (m1) at (3.5,6.5) {M1};
+% \node[font=\tiny] at (3.5,5.9) {Mother 1};
+\node[circle,draw=red!70,fill=red!30,thick,
+      minimum size=0.35cm,inner sep=0pt,drop shadow] (m1) at (3.5,6.5) {M1};
+\node[font=\tiny] at (3.5,5.9) {Mother 1};
+
+
+% % Child 1
+\node[circle,draw=blue!70,fill=blue!30,thick,minimum size=0.5cm,inner sep=0pt,drop shadow] (c1) at (1.5,6.5) {C1};
+\node[font=\tiny] at (1.5,5.9) {Child 1};
+
+
+% Bond 1
+\draw[line width=1.5pt,purple!60,decorate,decoration={snake,amplitude=1.5pt,segment length=6pt}] (m1) -- (c1);
+
+% ===== FAMILY 2 (Top Right) =====
+
+% Mother 2
+\node[circle,draw=red!70,fill=red!30,thick,minimum size=0.7cm,inner sep=0pt,drop shadow] (m2) at (8,6.5) {M2};
+\node[font=\tiny] at (8,5.9) {Mother 2};
+
+% Child 2
+\node[circle,draw=blue!70,fill=blue!30,thick,minimum size=0.6cm,inner sep=0pt,drop shadow] (c2) at (10.5,6.5) {C2};
+\node[font=\tiny] at (10.5,5.9) {Child 2};
+
+
+
+% Bond 2
+\draw[line width=1.5pt,purple!60,decorate,decoration={snake,amplitude=1.5pt,segment length=6pt}] (m2) -- (c2);
+
+% ===== FAMILY 3 (Bottom Center) =====
+% Mother 3
+\node[circle,draw=red!70,fill=red!30,thick,minimum size=0.7cm,inner sep=0pt,drop shadow] (m3) at (6,3.5) {M3};
+\node[font=\tiny] at (6,2.9) {Mother 3};
+
+% Child 3
+\node[circle,draw=blue!70,fill=blue!30,thick,minimum size=0.6cm,inner sep=0pt,drop shadow] (c3) at (6,1.5) {C3};
+\node[font=\tiny] at (6,0.9) {Child 3};
+
+
+
+% Bond 3
+\draw[line width=1.5pt,purple!60,decorate,decoration={snake,amplitude=1.5pt,segment length=6pt}] (m3) -- (c3);
+
+% ===== SHARED RESOURCES =====
+% Threat (shared danger)
+\node[regular polygon,regular polygon sides=3,draw=black!70,fill=gray!40,thick,minimum size=0.7cm] (threat) at (6,5) {T};
+\node[font=\tiny] at (6,4.4) {Threat};
+
+% Food Resources (limited, shared)
+\node[rectangle,draw=green!70,fill=green!30,thick,minimum size=0.5cm] (food1) at (2,3) {F};
+\node[font=\tiny] at (2,2.5) {Food};
+
+\node[rectangle,draw=green!70,fill=green!30,thick,minimum size=0.5cm] (food2) at (9.5,3) {F};
+\node[font=\tiny] at (9.5,2.5) {Food};
+
+% ===== INTERACTION ARROWS =====
+% M1 sensing C2 (potential alloparental care decision)
+\draw[->,thick,dashed,orange!70] (m1) to[bend left=20] (c2);
+\node[orange!70,font=\small] at (5.5,7.2) {Help?};
+
+
+% M2 moving toward food (competing with M3)
+\draw[->,thick,blue!60] (m2) to[bend right=15] (food2);
+\node[blue!60,font=\small] at (7.8,4.5) {Compete};
+
+
+% M3 protecting all children from threat (cooperative defense)
+\draw[->,thick,green!100] (m3) -- (threat);
+\node[green!100,font=\small] at (5.4,4.2) {Protect};
+
+% M1 foraging (caring for own child first)
+\draw[->,thick,brown!60] (m1) to[bend right=15] (food1);
+\node[brown!100,font=\small] at (1.6,4.5) {Forage};
+
+% ===== SENSORY RANGES (showing overlap) =====
+\draw[densely dotted,red!30,thick] (m1) circle (2.5cm);
+\draw[densely dotted,red!30,thick] (m2) circle (2.5cm);
+\draw[densely dotted,red!30,thick] (m3) circle (2.8cm);
+
+
+% LEGEND
+\node[rectangle,draw=gray!60,fill=gray!10,align=left,font=\tiny,inner sep=4pt] at (1.5,1.2) {
+    \textbf{Legend:}\\
+    M: Mother Agent\\
+    C: Child Agent\\
+    T: Shared Threat\\
+    F: Shared Food\\
+    Dotted: Sensory Range
+};
+
+
+\end{tikzpicture}
+\caption{\textbf{Illustration of the multi-family evolutionary grid-world environment.} 
+The environment is represented as a two-dimensional grid containing three mother--child pairs, shared food resources, and a common threat. 
+Each mother agent occupies the environment together with its offspring and perceives nearby cues within a limited sensory range, shown by the dotted circles. 
+Food entities provide energy for maternal self-maintenance, whereas the threat introduces environmental pressure that may trigger protective behavior. 
+The arrows illustrate example behavioral tendencies that may arise in the simulation, including foraging, competition for resources, protection from threats, and potential caregiving toward non-kin offspring. 
+Across generations, maternal behavioral parameters are inherited and selected according to offspring survival, allowing different caregiving strategies to emerge and evolve under shared ecological constraints.}
+\label{fig:gridworld_multifamily}
+\end{figure}

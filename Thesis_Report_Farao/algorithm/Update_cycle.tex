@@ -1,0 +1,38 @@
+
+% \begin{algorithm}[H]
+% \caption{Agent Update Cycle at Time $t$}
+
+% \KwIn{Environment state $E(t)$, agent state $s_i(t)$, genotype $G_i$}
+% \KwOut{Updated state $s_i(t+1)$ and environment $E(t+1)$}
+
+% $o_i(t) \leftarrow P_i(E(t))$ \tcp*{Perception: extract cues}
+
+% $m_i(t) \leftarrow M_i(G_i, s_i(t), o_i(t))$ \tcp*{Motivation update}
+
+% $a_i(t) \leftarrow \pi_i(G_i, m_i(t), s_i(t), o_i(t))$ \tcp*{Choose action}
+
+% $s_i(t+1) \leftarrow f_i(G_i, s_i(t), o_i(t), a_i(t))$ \tcp*{Internal update}
+
+% $E(t+1) \leftarrow g(E(t), a_1(t), \dots, a_K(t))$ \tcp*{Environment update}
+
+% \Return{$s_i(t+1), E(t+1)$}
+
+% \end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Agent Update Cycle at Time $t$}
+\begin{algorithmic}[1]
+
+\State \textbf{Input:} Environment state $E(t)$, agent state $s_i(t)$, genotype $G_i$
+\State \textbf{Output:} Updated state $s_i(t+1)$ and environment $E(t+1)$
+
+\State $o_i(t) \gets P_i(E(t))$ \Comment{Perception: extract cues}
+\State $m_i(t) \gets M_i(G_i, s_i(t), o_i(t))$ \Comment{Motivation update}
+\State $a_i(t) \gets \pi_i(G_i, m_i(t), s_i(t), o_i(t))$ \Comment{Choose action}
+\State $s_i(t+1) \gets f_i(G_i, s_i(t), o_i(t), a_i(t))$ \Comment{Internal update}
+\State $E(t+1) \gets g(E(t), a_1(t), \ldots, a_K(t))$ \Comment{Environment update}
+
+\State \Return $(s_i(t+1), E(t+1))$
+
+\end{algorithmic}
+\end{algorithm}
