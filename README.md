@@ -4,7 +4,7 @@ Gridworld simulation with mother–child–threat dynamics, internal states, mot
 
 **Thesis report:** [AJ.Blink — Maternal Instinct (PDF)](Thesis_Report_Farao/AJ.Blink-Maternal_Instinct.pdf)
 
-**Final defense:** [Final Defense (PDF)](Thesis_Report_Farao/Final_Defense_T_T.pdf)
+**Final defense:** [Final Defense (PDF)](Thesis_Report_Farao/Final-Defense-T_T.pdf)
 
 **Final presentation slides:** [Canva deck](https://canva.link/ojzvlcfes79tz12)
 
