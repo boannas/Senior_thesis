@@ -1,43 +1,91 @@
+"""
+Mother agent decision-making policy.
+
+Pipeline per tick:
+1. Compute motivation scores (Forage, Care, Self, Protect)
+2. Select dominant motivation (argmax)
+3. Choose goal position + immediate action from motivation
+4. Pathfind toward goal (A* or greedy fallback)
+5. Apply actions (feed, care, eat, rest, protect)
+6. Update outcome-gated plasticity (learn from results)
+"""
+
 import numpy as np
 from func.path_finding import astar
+from core.agents import weighted_sum
 from core.sim.movement import in_bounds, best_step
 from core.policies.deficit import IDEAL_VALUE, deficit_abs, deficit_high, deficit_low
-import random
-random.seed(42)
-np.random.seed(42)
+
+
+# ─── Helpers ────────────────────────────────────────────────────────────
+
+
+def food_at_cell(world, x, y):
+    """Return the first uncollected food at (x, y), or None."""
+    for food in world.foods:
+        if not food.collected and (food.x, food.y) == (x, y):
+            return food
+    return None
+
+
+def clamp(value, lo=0.0, hi=100.0):
+    """Clamp a value to [lo, hi]."""
+    return max(lo, min(value, hi))
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# STEP 1 — Proposal Generation (movement + action intent)
+# ═══════════════════════════════════════════════════════════════════════
 
 def mother_policy_propose(world):
-    perception_range = 100
-    proposals = {}
+    """
+    For each mother, compute motivation → choose goal → plan path.
 
+    Returns
+    -------
+    proposals : dict {mother: (target_x, target_y)}
+    intents   : dict with 'prev_pos', 'forage_modes', 'intended_actions'
+    """
+    perception_range = 8  # Bounded perception: ~8 cell octile distance (realistic search)
+    proposals = {}
     occupied_now = {(m.x, m.y) for m in world.mothers}
-    mother_receive = world.foods + world.mothers + world.children + world.threats
+    all_visible_entities = world.foods + world.mothers + world.children + world.threats
 
     forage_modes = {}
     intended_actions = {}
-
-    prev_pos = {m: (m.x, m.y) for m in world.mothers}
+    prev_positions = {mother: (mother.x, mother.y) for mother in world.mothers}
 
     for mother in world.mothers:
-
-        if mother.fatigue >= 90:
+        # Passive survival lower bound: freeze mothers (no move, no action).
+        if getattr(world, "passive_mothers", False):
             proposals[mother] = (mother.x, mother.y)
             continue
 
-        food_perceived, _ = mother.scan_perception(mother_receive, perception_range=perception_range)
+        food_perceived, _ = mother.scan_perception(
+            all_visible_entities, perception_range=perception_range
+        )
 
-        goal = None
-        child = mother.child
+        # --- Motivation selection ---
+        compute_motivations(mother)
+        mother.selected_motivation = select_motivation(mother)
 
-        # ----- Select motivation -----
-        motivation_compute(mother)
-        mother.selected_motivation = select_motivation(mother=mother)
+        # Segment-based credit assignment (optional):
+        # update when motivation changes (or every K ticks if capped).
+        _plasticity_segment_on_select(mother, world)
+
+        # Store deficit at the moment of selection for outcome-gated plasticity.
+        # This is intentionally after selection so "local" deficit can align to the chosen motivation.
+        deficit_signal = getattr(world, "plasticity_deficit_signal", "global")
+        if deficit_signal == "local":
+            mother._deficit_before = compute_local_deficit(mother, mother.selected_motivation)
+        else:
+            mother._deficit_before = compute_overall_deficit(mother)
         goal, action, forage_mode = choose_goal_from_motivation(
-            world, mother,  mother.selected_motivation, food_perceived
-            )
-        
-        print(goal, action, forage_mode)
+            world, mother, mother.selected_motivation, food_perceived
+        )
 
+
+        # If an immediate action was chosen (no movement needed)
         if action is not None:
             intended_actions[mother] = action
             proposals[mother] = (mother.x, mother.y)
@@ -47,399 +95,702 @@ def mother_policy_propose(world):
 
         if forage_mode is not None:
             forage_modes[mother] = forage_mode
-        
-        # ----- Hanndle Motivation not have -----
+
+        # No goal → stay put
         if goal is None:
-            valid_moves = []
-            for dx, dy in world.RANDOM_MOVES:
-                nx, ny = mother.x + dx, mother.y + dy
-                if in_bounds(nx, ny, world.grid_w, world.grid_h):
-                    valid_moves.append((nx, ny))
-            # proposals[mother] = random.choice(valid_moves) if valid_moves else (mother.x, mother.y)
             proposals[mother] = (mother.x, mother.y)
             continue
 
-        blocked = {(m.x, m.y) for m in world.mothers if m is not mother}
-        blocked |= {(c.x, c.y) for c in world.children
-                    if (c is not mother.child) and (not c.is_carried)}
-        
-        # block threats too 
-        blocked |= {(t.x, t.y) for t in world.threats}
-
-
+        # Already at goal → stay
         if goal == (mother.x, mother.y):
             proposals[mother] = (mother.x, mother.y)
             continue
 
+        # --- Pathfinding ---
+        blocked = {(m.x, m.y) for m in world.mothers if m is not mother}
+        blocked |= {(c.x, c.y) for c in world.children
+                    if (c is not mother.child) and (not c.is_carried)}
+        blocked |= {(t.x, t.y) for t in world.threats}
 
-        path = astar((mother.x, mother.y), goal, world.grid_w, world.grid_h, blocked, moves_8=True)
+        path = astar(
+            (mother.x, mother.y), goal,
+            world.grid_w, world.grid_h, blocked, moves_8=True
+        )
 
         if path is None:
-            nx, ny = best_step(mother, goal, occupied_now, world.grid_w, world.grid_h, world.RANDOM_MOVES)
+            next_x, next_y = best_step(
+                mother, goal, occupied_now,
+                world.grid_w, world.grid_h, world.RANDOM_MOVES
+            )
         elif len(path) < 2:
-            nx, ny = (mother.x, mother.y)   # already at goal, or degenerate path
+            next_x, next_y = mother.x, mother.y
         else:
-            nx, ny = path[1]
-            if (nx, ny) in occupied_now and (nx, ny) != (mother.x, mother.y):
-                nx, ny = best_step(mother, goal, occupied_now, world.grid_w, world.grid_h, world.RANDOM_MOVES)
+            next_x, next_y = path[1]
+            if (next_x, next_y) in occupied_now and (next_x, next_y) != (mother.x, mother.y):
+                next_x, next_y = best_step(
+                    mother, goal, occupied_now,
+                    world.grid_w, world.grid_h, world.RANDOM_MOVES
+                )
 
-        
-        proposals[mother] = (nx, ny)
+        proposals[mother] = (next_x, next_y)
 
     intents = {
-        "prev_pos": prev_pos,
+        "prev_pos": prev_positions,
         "forage_modes": forage_modes,
-        "intended_actions": intended_actions
+        "intended_actions": intended_actions,
     }
     return proposals, intents
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# STEP 2 — Apply Actions
+# ═══════════════════════════════════════════════════════════════════════
+
 def apply_mother_intents(world, intents):
-    prev_pos = intents["prev_pos"]
-    forage_modes = intents["forage_modes"]
+    """Apply all mother actions (move costs, child drop, feed, care, etc.)."""
+    prev_positions = intents["prev_pos"]
     actions = intents["intended_actions"]
 
-    # physiology
+    # Expose action executed this tick for external logging/analysis.
     for mother in world.mothers:
-        moved = (prev_pos[mother] != (mother.x, mother.y))
-        action = actions.get(mother)
-        acted = action is not None
-        mother.update_physiology(moved=moved, acted=acted)
+        mother._last_action = actions.get(mother) if actions.get(mother) is not None else "none"
 
+    # --- Update physiology (energy/fatigue costs) ---
+    for mother in world.mothers:
+        moved = (prev_positions[mother] != (mother.x, mother.y))
+        action = actions.get(mother)
+        acted = action is not None and action != "rest"
+        rested = (action == "rest")
+        mother.update_physiology(moved=moved, acted=acted, rested=rested)
+
+    # --- Drop child if mother moved while carrying ---
     for mother in world.mothers:
         child = mother.child
         if child is None:
             continue
-        moved = prev_pos[mother] != (mother.x, mother.y)
+        moved = prev_positions[mother] != (mother.x, mother.y)
         if child.is_carried and moved:
             child.set_carried(False)
             mother.picking_child(False)
-            child.x, child.y = prev_pos[mother]
+            child.x, child.y = prev_positions[mother]
 
-    # Action
+    # --- Execute actions ---
     for mother in world.mothers:
         action = actions.get(mother)
         child = mother.child
 
-
         if action == "care":
             if child and (mother.x, mother.y) == (child.x, child.y):
-                child.warmth = min(50.0, child.warmth + 1.0)
-        
-        elif action == "rest":
-            pass
+                # Config: +5 warmth per care action
+                child.warmth = min(50.0, child.warmth + 5.0)
 
-        elif action == 'eat':
+        elif action == "rest":
+            pass  # Mother rests (no action needed, physiology handles recovery)
+
+        elif action == "eat":
             if mother.food_inventory > 0:
                 mother.food_inventory -= 1
-                mother.energy = min(100, mother.energy + 5)
-            else: 
-                f = food_at_cell(world, mother.x, mother.y)
-                if f is not None:
-                    f.collect()
-                    mother.energy = min(100, mother.energy + 5)
-        
-        elif action == 'pick_food':
-            f = food_at_cell(world, mother.x, mother.y)
-            if f and not f.collected:
-                f.collect()
+                mother.energy = min(100, mother.energy + 10)
+            else:
+                food = food_at_cell(world, mother.x, mother.y)
+                if food is not None:
+                    food.collect()
+                    mother.energy = min(100, mother.energy + 10)
+
+        elif action == "pick_food":
+            food = food_at_cell(world, mother.x, mother.y)
+            if food and not food.collected:
+                food.collect()
                 mother.food_inventory += 1
 
         elif action == "feed_child":
-            if child and child.is_alive() and mother.food_inventory > 0 and (mother.x, mother.y) == (child.x, child.y):
+            if (child and child.is_alive()
+                    and mother.food_inventory > 0
+                    and (mother.x, mother.y) == (child.x, child.y)):
                 mother.food_inventory -= 1
-                child.hunger = max(0, child.hunger - 20)
-            
-        elif action == 'threaten':
-            pass
+                # Config: -10 hunger per feed action
+                child.hunger = max(0, child.hunger - 10)
 
+        elif action == "threaten":
+            pass  # Placeholder for future threat confrontation mechanics
 
-def overall_deficit(mother):
-    """
-    Scalar overall deficit = all mother deficits + all child deficits (normalized 0–1).
-    Used for outcome-gated plasticity: did the situation get better or worse after acting?
-    Mother: energy, closeness, fear, stress, fatigue, bonding (all vs IDEAL_VALUE).
-    Child: hunger, warmth, injury (all vs IDEAL_VALUE).
-    """
-    n = 100.0
-    # Mother deficits (ideal: high energy, mid closeness, zero fear/stress/fatigue, high bonding)
-    m_energy_def = deficit_low(mother.energy, IDEAL_VALUE["M_energy"]) / n
-    m_closeness_def = deficit_abs(mother.closeness_child, IDEAL_VALUE["M_closeness"]) / n
-    m_fear_def = deficit_high(mother.fear_threat, IDEAL_VALUE["M_fear"]) / n
-    m_stress_def = deficit_high(mother.stress, IDEAL_VALUE["M_stress"]) / n
-    m_fatigue_def = deficit_high(mother.fatigue, IDEAL_VALUE["M_fatigue"]) / n
-    m_bonding_def = deficit_low(mother.bonding, IDEAL_VALUE["M_bonding"]) / n
-    total = m_energy_def + m_closeness_def + m_fear_def + m_stress_def + m_fatigue_def + m_bonding_def
-    # Child deficits (ideal: zero hunger, mid warmth, zero injury)
-    if mother.child is not None and mother.child.is_alive():
-        c = mother.child
-        total += deficit_high(c.hunger, IDEAL_VALUE["C_hunger"]) / n
-        total += deficit_abs(c.warmth, IDEAL_VALUE["C_warmth"]) * 2 / n  # warmth in [0,50]
-        total += deficit_high(c.injury, IDEAL_VALUE["C_injury"]) / n
-    return total
-
-
-def _clamp_plastic(plastic_dict, cat, key, lo=0.0, hi=2.0):
-    plastic_dict[cat][key] = max(lo, min(hi, plastic_dict[cat][key]))
-
-
-def _motivation_to_u_key(mot):
-    return mot.lower() if mot else None
-
-
-# Which w (psych) categories to update when this motivation was selected (support that motivation)
-MOTIVATION_TO_W_CATEGORIES = {
-    "forage": ["child_need", "cort"],
-    "care": ["bonding", "ot"],
-    "self": ["stress", "cort", "fear"],
-    "protect": ["fear", "child_need"],
-}
-
-
-def update_plasticity(mother, action, world):
-    """
-    Outcome-gated plasticity for both u (motivation weights) and w (psych weights):
-    - If overall deficit decreased → strengthen plastic weights that were active for selected motivation.
-    - If overall deficit increased → weaken them (learn it may not be best in that situation).
-    """
-    if not hasattr(mother, "u_plastic"):
+    # --- Step 6: plasticity update (optional, controlled by world.plasticity_rule) ---
+    plasticity_rule = getattr(world, "plasticity_rule", None)
+    if plasticity_rule is None:
         return
-    eta = getattr(mother, "eta", 0.02)
-    u_plastic = mother.u_plastic
-    deficit_before = getattr(mother, "_deficit_before", None)
-    if deficit_before is None:
-        return
-    deficit_after = overall_deficit(mother)
-    inputs = getattr(mother, "_last_motivation_inputs", None)
-    if inputs is None:
-        return
-    M = _motivation_to_u_key(mother.selected_motivation)
-    if M is None or M not in u_plastic:
-        return
-    state_threshold = 0.25
-    # --- Plasticity for u (motivation weights) ---
-    for key in u_plastic[M]:
-        val = inputs.get(M, {}).get(key, 0.0)
-        if val < state_threshold:
-            continue
-        if deficit_after < deficit_before:
-            u_plastic[M][key] += eta
-        elif deficit_after > deficit_before:
-            u_plastic[M][key] -= eta
-        _clamp_plastic(u_plastic, M, key)
-    # --- Plasticity for w (psych weights): same outcome gating, for categories that support M ---
-    if hasattr(mother, "w_plastic"):
-        w_plastic = mother.w_plastic
-        categories = MOTIVATION_TO_W_CATEGORIES.get(M, [])
-        for cat in categories:
-            if cat not in w_plastic:
-                continue
-            for key in w_plastic[cat]:
-                if deficit_after < deficit_before:
-                    w_plastic[cat][key] += eta
-                elif deficit_after > deficit_before:
-                    w_plastic[cat][key] -= eta
-                _clamp_plastic(w_plastic, cat, key)
+    if plasticity_rule not in ("outcome", "outcome_adaptive", "outcome_signed", "outcome_adaptive_signed"):
+        raise NotImplementedError(f"Unsupported plasticity_rule on baseline: {plasticity_rule!r}")
+    for mother in world.mothers:
+        update_plasticity(mother, actions.get(mother), world)
 
 
-def motivation_compute(mother):
+# ═══════════════════════════════════════════════════════════════════════
+# Motivation Computation
+# ═══════════════════════════════════════════════════════════════════════
 
-    # Mother attr.
-    m_closeness_def = deficit_abs(mother.closeness_child, IDEAL_VALUE['M_closeness'])
-    m_energy_def = deficit_low(mother.energy, IDEAL_VALUE['M_energy'])
-    m_fear = mother.fear_threat
-    m_bonding = mother.bonding
-    m_fatigue = mother.fatigue
-    m_stress = mother.stress
+def compute_motivations(mother):
+    """
+    Compute all four motivation scores for a mother based on her
+    current states and her child's needs.
 
-    # Normalize Mother attr.
-    normalize_value = 100.0
-    m_closeness_def = m_closeness_def / normalize_value
-    m_energy_def = m_energy_def / normalize_value
-    m_fear = m_fear / normalize_value
-    m_bonding = m_bonding / normalize_value
-    m_fatigue = m_fatigue / normalize_value
-    m_stress = m_stress / normalize_value
+    Motivations:
+    - Forage:  driven by child hunger, own energy deficit, low fear
+    - Care:    driven by child warmth deficit, closeness deficit, bonding
+    - Self:    driven by fatigue, fear, stress
+    - Protect: driven by child injury, fear, closeness deficit, bonding
+    """
+    normalize = 100.0
+    mw = mother.motivation_weights  # shorthand
 
-    # Child alive >,<
+    # --- Compute mother-side signals (normalized to [0, 1]) ---
+    closeness_deficit = deficit_abs(mother.closeness_child, IDEAL_VALUE['M_closeness']) / normalize
+    energy_deficit = deficit_low(mother.energy, IDEAL_VALUE['M_energy']) / normalize
+    fear = mother.fear_threat / normalize
+    bonding = mother.bonding / normalize
+    fatigue = mother.fatigue / normalize
+    stress = mother.stress / normalize
+
+    # --- Compute child-side signals ---
     if mother.child is not None and mother.child.alive:
         child = mother.child
-        # Child deficit
-        c_hunger_def = deficit_high(child.hunger, IDEAL_VALUE['C_hunger'])
-        c_warmth_def = deficit_abs(child.warmth, IDEAL_VALUE['C_warmth']) * 2 # range is for [0,50]
-        c_injury_def = deficit_high(child.injury, IDEAL_VALUE['C_injury'])
-
-        # Normalize Child deficit
-        c_hunger_def /= normalize_value
-        c_warmth_def /= normalize_value
-        c_injury_def /= normalize_value
-        # print(c_hunger_def)
-    
-    # Child died T_T
+        child_hunger = deficit_high(child.hunger, IDEAL_VALUE['C_hunger']) / normalize
+        child_warmth = deficit_abs(child.warmth, IDEAL_VALUE['C_warmth']) * 2 / normalize  # range [0,50]
+        child_injury = deficit_high(child.injury, IDEAL_VALUE['C_injury']) / normalize
     else:
-        c_hunger_def = 0
-        c_warmth_def = 0
-        m_closeness_def = 0
-        c_injury_def = 0
+        child_hunger = 0.0
+        child_warmth = 0.0
+        child_injury = 0.0
+        closeness_deficit = 0.0
 
-    # --- Compute Motivation ---
-    # Forage
-    forage_u = mother.u["forage"]
-    forage_u_sum = weight_sum(
-        forage_u,
-        ['child_hunger', 'energy_deficit', 'low_fear']
-    )
-    M_forage = 100.0 * (
-        forage_u['child_hunger'] * c_hunger_def +
-        forage_u['energy_deficit'] * m_energy_def +
-        forage_u['low_fear'] * (1 - m_fear)
-    ) / forage_u_sum
+    # --- Forage motivation ---
+    forage_sum = weighted_sum(mw["forage"], ['child_hunger', 'energy_deficit', 'low_fear'])
+    motivation_forage = 100.0 * (
+        mw["forage"]["child_hunger"] * child_hunger +
+        mw["forage"]["energy_deficit"] * energy_deficit +
+        mw["forage"]["low_fear"] * (1.0 - fear) # This makes the forage bias when the mother is not scared but also need to keep for the future adjust 
+    ) / forage_sum
 
-    # Care
-    care_u = mother.u["care"]
-    care_u_sum = weight_sum(
-        care_u,
-        ['child_warmth', 'closeness_deficit', 'bonding']
-    )
-    M_Care = 100.0 * (
-        care_u['child_warmth'] * c_warmth_def + 
-        care_u['closeness_deficit'] * m_closeness_def +
-        care_u['bonding'] * m_bonding
-    ) / care_u_sum
+    # --- Care motivation ---
+    care_sum = weighted_sum(mw["care"], ['child_warmth', 'closeness_deficit', 'bonding'])
+    motivation_care = 100.0 * (
+        mw["care"]["child_warmth"] * child_warmth +
+        mw["care"]["closeness_deficit"] * closeness_deficit +
+        mw["care"]["bonding"] * bonding
+    ) / care_sum
 
+    # --- Self motivation ---
+    self_sum = weighted_sum(mw["self"], ['fatigue', 'fear', 'stress'])
+    motivation_self = 100.0 * (
+        mw["self"]["fatigue"] * fatigue +
+        mw["self"]["fear"] * fear +
+        mw["self"]["stress"] * stress
+    ) / self_sum
 
-    # Self
-    self_u = mother.u["self"]
-    self_u_sum = weight_sum(
-        self_u,
-        ['fatigue', 'fear', 'stress']
-    )
-    M_self = 100.0 * (
-        self_u['fatigue'] * m_fatigue +
-        self_u['fear'] * m_fear +
-        self_u['stress'] * m_stress
-    ) / self_u_sum
+    # --- Protect motivation ---
+    protect_sum = weighted_sum(mw["protect"], ['child_injury', 'fear', 'closeness_deficit', 'bonding'])
+    motivation_protect = 100.0 * (
+        mw["protect"]["child_injury"] * child_injury +
+        mw["protect"]["fear"] * fear +
+        mw["protect"]["closeness_deficit"] * closeness_deficit +
+        mw["protect"]["bonding"] * bonding
+    ) / protect_sum
 
+    # --- Store results ---
+    mother.motivations['Forage'] = clamp(motivation_forage)
+    mother.motivations['Care'] = clamp(motivation_care)
+    mother.motivations['Self'] = clamp(motivation_self)
+    mother.motivations['Protect'] = clamp(motivation_protect)
 
-    # Protect
-    protect_u = mother.u["protect"]
-    protect_u_sum = weight_sum(
-        protect_u,
-        ['child_injury', 'fear', 'closeness_deficit', 'bonding']
-    )
-    M_protect = 100.0 * (
-        protect_u['child_injury'] * c_injury_def + 
-        protect_u['fear'] * m_fear + 
-        protect_u['closeness_deficit'] * m_closeness_def +
-        protect_u['bonding'] * m_bonding
-    ) / protect_u_sum
-    
-    mother.motivations['Forage']    = clamp(M_forage)
-    mother.motivations['Care']      = clamp(M_Care)
-    mother.motivations['Self']      = clamp(M_self)
-    mother.motivations['Protect']   = clamp(M_protect)
-
-    # For outcome-gated plasticity: store deficit and inputs at decision time
+    # --- Store inputs for plasticity learning (used after action) ---
     mother._last_motivation_inputs = {
-        "forage": {"child_hunger": c_hunger_def, "energy_deficit": m_energy_def, "low_fear": 1.0 - m_fear},
-        "care": {"child_warmth": c_warmth_def, "closeness_deficit": m_closeness_def, "bonding": m_bonding},
-        "self": {"fatigue": m_fatigue, "fear": m_fear, "stress": m_stress},
-        "protect": {"child_injury": c_injury_def, "fear": m_fear, "closeness_deficit": m_closeness_def, "bonding": m_bonding},
+        "forage":  {"child_hunger": child_hunger, "energy_deficit": energy_deficit, "low_fear": 1.0 - fear},
+        "care":    {"child_warmth": child_warmth, "closeness_deficit": closeness_deficit, "bonding": bonding},
+        "self":    {"fatigue": fatigue, "fear": fear, "stress": stress},
+        "protect": {"child_injury": child_injury, "fear": fear, "closeness_deficit": closeness_deficit, "bonding": bonding},
     }
-    mother._deficit_before = overall_deficit(mother)
+    # Note: deficit_before is stored after motivation selection in mother_policy_propose()
+
 
 def select_motivation(mother):
-    # for k, v in mother.motivations.items():
-    #     print(f"{k}: {v:.2f}")
-
+    """Select the highest-scoring motivation as the dominant one."""
     motivation_names = list(mother.motivations.keys())
     motivation_values = list(mother.motivations.values())
+    best_index = np.argmax(motivation_values)
+    return motivation_names[best_index]
 
-    mot_idx = np.argmax(motivation_values)
-    selected = motivation_names[mot_idx]
-    print(f"Selected motivation: {selected} ({motivation_values[mot_idx]:.2f})\n")
 
-    return selected
+# ═══════════════════════════════════════════════════════════════════════
+# Goal Selection from Motivation
+# ═══════════════════════════════════════════════════════════════════════
 
-def clamp(x, lo=0.0, hi=100.0):
-    return max(lo, min(x, hi))
-
-def choose_goal_from_motivation(world, mother, selected, food_perceived):
+def choose_goal_from_motivation(world, mother, selected_motivation, food_perceived):
+    """
+    Given the selected motivation, determine:
+    - goal: (x, y) position to move toward
+    - action: immediate action to perform (or None)
+    - forage_mode: sub-mode for forage motivation (or None)
+    """
     child = mother.child
 
+    if selected_motivation == "Forage":
+        return _goal_forage(world, mother, child, food_perceived)
 
-    if selected == "Forage":
-
-        m_energy_def = deficit_low(mother.energy, IDEAL_VALUE['M_energy'])
-        c_hunger_def = deficit_high(child.hunger, IDEAL_VALUE['C_hunger']) if child else 0
-        
-        # carring food already
-        if mother.food_inventory > 0:
-            if child and c_hunger_def > m_energy_def:
-                if (mother.x, mother.y) == (child.x, child.y):
-                    return (mother.x, mother.y), "feed_child", "give_child"
-                else:
-                    return (child.x, child.y), None, "give_child"
-                
-            else: 
-                return (mother.x, mother.y), "eat", "eat_self"
-            
-        # not carrying food 
-        if food_perceived:
-            food_perceived.sort(key=lambda t:t[1])
-            target_food = food_perceived[0][0]
-
-            if (mother.x, mother.y) == (target_food.x, target_food.y):
-                if child and c_hunger_def > m_energy_def:
-                    return (mother.x, mother.y), "pick_food", "fetch_for_child"
-                else: 
-                    return (mother.x, mother.y), "eat", "fetch_for_self"
-                
-            return (target_food.x, target_food.y), None, None
-        return (mother.x, mother.y), None, None    
-
-    elif selected == "Care":
+    elif selected_motivation == "Care":
         if child is not None and child.is_alive():
             if (mother.x, mother.y) == (child.x, child.y):
                 return (mother.x, mother.y), "care", None
             else:
                 return (child.x, child.y), None, None
 
-    elif selected == "Protect":
-        if child is None or not child.is_alive():
-            return (mother.x, mother.y), None, None
-        
-        d_child = mother.distance_to(child.x, child.y)
+    elif selected_motivation == "Protect":
+        return _goal_protect(world, mother, child)
 
-        if d_child > 1:
-            return (child.x, child.y), None, None
-        
-        # Find nearest threat
-        nearest = None
-        best_d = 999
-        for t in world.threats:
-            d = child.distance_to(t.x, t.y)
-            if d < best_d:
-                best_d = d
-                nearest = t
-
-        if nearest is not None:
-            return (nearest.x, nearest.y), None, None
-        
-        return (mother.x, mother.y), None, None
-
-
-    elif selected == "Self":
+    elif selected_motivation == "Self":
         return (mother.x, mother.y), "rest", None
 
     return None, None, None
 
 
+def _goal_forage(world, mother, child, food_perceived):
+    """Determine forage goal: eat self, feed child, or search for food."""
+    energy_deficit = deficit_low(mother.energy, IDEAL_VALUE['M_energy'])
+    child_hunger = deficit_high(child.hunger, IDEAL_VALUE['C_hunger']) if child else 0
 
-def weight_sum(group, keys):
-    return sum(group[k] for k in keys)
+    # Already carrying food → decide who to feed
+    if mother.food_inventory > 0:
+        if child and child_hunger > energy_deficit:
+            if (mother.x, mother.y) == (child.x, child.y):
+                return (mother.x, mother.y), "feed_child", "give_child"
+            else:
+                return (child.x, child.y), None, "give_child"
+        else:
+            return (mother.x, mother.y), "eat", "eat_self"
 
-def food_at_cell(world, x, y):
-    for f in world.foods:
-        if not f.collected and (f.x, f.y) == (x, y):
-            return f
-    return None
+    # Not carrying food → find nearest food
+    if food_perceived:
+        food_perceived.sort(key=lambda item: item[1])
+        target_food = food_perceived[0][0]
+
+        if (mother.x, mother.y) == (target_food.x, target_food.y):
+            if child and child_hunger > energy_deficit:
+                return (mother.x, mother.y), "pick_food", "fetch_for_child"
+            else:
+                return (mother.x, mother.y), "eat", "fetch_for_self"
+
+        return (target_food.x, target_food.y), None, None
+
+    return (mother.x, mother.y), None, None
+
+
+def _goal_protect(world, mother, child):
+    """Determine protect goal: move to child, then confront nearest threat."""
+    if child is None or not child.is_alive():
+        return (mother.x, mother.y), None, None
+
+    distance_to_child = mother.distance_to(child.x, child.y)
+
+    # First priority: get close to child
+    if distance_to_child > 1:
+        return (child.x, child.y), None, None
+
+    # Already near child → approach nearest threat
+    nearest_threat = None
+    best_dist = 999
+    for threat in world.threats:
+        dist = child.distance_to(threat.x, threat.y)
+        if dist < best_dist:
+            best_dist = dist
+            nearest_threat = threat
+
+    if nearest_threat is not None:
+        return (nearest_threat.x, nearest_threat.y), None, None
+
+    return (mother.x, mother.y), None, None
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Overall Deficit (for plasticity learning)
+# ═══════════════════════════════════════════════════════════════════════
+
+def compute_overall_deficit(mother):
+    """
+    Compute a scalar overall deficit score (0 = everything ideal).
+    Used for outcome-gated plasticity: did the situation improve after acting?
+    """
+    norm = 100.0
+
+    # Mother deficits
+    total = (
+        deficit_low(mother.energy, IDEAL_VALUE["M_energy"]) / norm +
+        deficit_abs(mother.closeness_child, IDEAL_VALUE["M_closeness"]) / norm +
+        deficit_high(mother.fear_threat, IDEAL_VALUE["M_fear"]) / norm +
+        deficit_high(mother.stress, IDEAL_VALUE["M_stress"]) / norm +
+        deficit_high(mother.fatigue, IDEAL_VALUE["M_fatigue"]) / norm +
+        deficit_low(mother.bonding, IDEAL_VALUE["M_bonding"]) / norm
+    )
+
+    # Child deficits
+    if mother.child is not None and mother.child.is_alive():
+        child = mother.child
+        total += deficit_high(child.hunger, IDEAL_VALUE["C_hunger"]) / norm
+        total += deficit_abs(child.warmth, IDEAL_VALUE["C_warmth"]) * 2 / norm
+        total += deficit_high(child.injury, IDEAL_VALUE["C_injury"]) / norm
+
+    return total
+
+
+def compute_local_deficit(mother, selected_motivation):
+    """
+    Compute a motivation-aligned (local) deficit for outcome-gated plasticity.
+
+    Rationale: global deficit mixes many drifting states and can be noisy.
+    Local deficit focuses the learning signal on the states that the selected
+    motivation/action is intended to improve.
+    """
+    norm = 100.0
+    if not selected_motivation:
+        return compute_overall_deficit(mother)
+
+    sel = str(selected_motivation).lower()
+
+    # Mother-side components
+    energy_def = deficit_low(mother.energy, IDEAL_VALUE["M_energy"]) / norm
+    closeness_def = deficit_abs(mother.closeness_child, IDEAL_VALUE["M_closeness"]) / norm
+    fear_def = deficit_high(mother.fear_threat, IDEAL_VALUE["M_fear"]) / norm
+    stress_def = deficit_high(mother.stress, IDEAL_VALUE["M_stress"]) / norm
+    fatigue_def = deficit_high(mother.fatigue, IDEAL_VALUE["M_fatigue"]) / norm
+    bonding_def = deficit_low(mother.bonding, IDEAL_VALUE["M_bonding"]) / norm
+
+    # Child-side components (0 if absent/dead)
+    child_hunger_def = 0.0
+    child_warmth_def = 0.0
+    child_injury_def = 0.0
+    if mother.child is not None and mother.child.is_alive():
+        child = mother.child
+        child_hunger_def = deficit_high(child.hunger, IDEAL_VALUE["C_hunger"]) / norm
+        child_warmth_def = deficit_abs(child.warmth, IDEAL_VALUE["C_warmth"]) * 2 / norm
+        child_injury_def = deficit_high(child.injury, IDEAL_VALUE["C_injury"]) / norm
+
+    # Align to motivation feature sets used in compute_motivations()
+    if sel == "forage":
+        return child_hunger_def + energy_def + fear_def
+    if sel == "care":
+        return child_warmth_def + closeness_def + bonding_def
+    if sel == "self":
+        return fatigue_def + fear_def + stress_def
+    if sel == "protect":
+        return child_injury_def + fear_def + closeness_def + bonding_def
+
+    return compute_overall_deficit(mother)
+
+
+# Backwards-compatible alias (used by mother-plasticity experiments)
+def overall_deficit(mother):
+    return compute_overall_deficit(mother)
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Outcome-Gated Plasticity (Learning)
+# ═══════════════════════════════════════════════════════════════════════
+
+# Which psych weight categories support each motivation
+MOTIVATION_TO_PSYCH_CATEGORIES = {
+    "forage":  ["child_need", "cortisol"],
+    "care":    ["bonding", "oxytocin"],
+    "self":    ["stress", "cortisol", "fear"],
+    "protect": ["fear", "child_need"],
+}
+
+
+def _clamp_plastic_weight(plastic_dict, category, key, lo=0.0, hi=2.0):
+    """Clamp a single plastic weight to [lo, hi]."""
+    plastic_dict[category][key] = max(lo, min(hi, plastic_dict[category][key]))
+
+
+def update_plasticity(mother, action, world):
+    """
+    Outcome-gated Hebbian learning:
+    - If overall deficit DECREASED after acting → strengthen active weights
+    - If overall deficit INCREASED after acting → weaken active weights
+
+    Updates both motivation weights (u) and psych weights (w).
+    """
+    if not hasattr(mother, "motivation_weights_plastic"):
+        return
+
+    update_mode = getattr(world, "plasticity_update_mode", "per_tick")
+    if update_mode in ("segment", "segment_capped"):
+        # Segment-based updates are handled at motivation selection time.
+        return
+
+    base_lr = getattr(mother, "learning_rate", 0.02)
+    plasticity_rule = getattr(world, "plasticity_rule", "outcome")
+    deficit_before = getattr(mother, "_deficit_before", None)
+    if deficit_before is None:
+        return
+
+    deficit_signal = getattr(world, "plasticity_deficit_signal", "global")
+    if deficit_signal == "local":
+        deficit_after = compute_local_deficit(mother, mother.selected_motivation)
+    else:
+        deficit_after = compute_overall_deficit(mother)
+    inputs = getattr(mother, "_last_motivation_inputs", None)
+    if inputs is None:
+        return
+
+    selected = mother.selected_motivation.lower() if mother.selected_motivation else None
+    if selected is None or selected not in mother.motivation_weights_plastic:
+        return
+
+    state_threshold = 0.25
+
+    # Adaptive Baldwin-style step size:
+    # learn more when overall deficit is high; learn less when stable/low deficit.
+    # deficit_before is a scalar sum of normalized deficits (typically O(0..few)).
+    if plasticity_rule in ("outcome_adaptive", "outcome_adaptive_signed"):
+        lr_min = getattr(mother, "learning_rate_min", 0.002)
+        lr_max = getattr(mother, "learning_rate_max", 0.05)
+        deficit_scale = getattr(mother, "learning_deficit_scale", 2.0)
+        # scale in [0,1]
+        s = max(0.0, min(1.0, float(deficit_before) / float(deficit_scale)))
+        learning_rate = lr_min + (lr_max - lr_min) * s
+    else:
+        learning_rate = base_lr
+
+    # Expose learning diagnostics for logging/plots
+    mother._last_deficit_before = float(deficit_before)
+    mother._last_deficit_after = float(deficit_after)
+    mother._last_learning_rate_eff = float(learning_rate)
+    mother._last_plasticity_rule = plasticity_rule
+
+    # --- Update motivation weights (plastic) ---
+    mot_plastic = mother.motivation_weights_plastic
+    for key in mot_plastic[selected]:
+        input_value = inputs.get(selected, {}).get(key, 0.0)
+        if input_value < state_threshold:
+            continue
+        if deficit_after < deficit_before:
+            mot_plastic[selected][key] += learning_rate
+        elif deficit_after > deficit_before:
+            mot_plastic[selected][key] -= learning_rate
+        _clamp_plastic_weight(mot_plastic, selected, key)
+
+    # --- Update psych weights (plastic) ---
+    learn_w = bool(getattr(world, "plasticity_learn_w", True))
+    if learn_w and hasattr(mother, "psych_weights_plastic"):
+        psych_plastic = mother.psych_weights_plastic
+        relevant_categories = MOTIVATION_TO_PSYCH_CATEGORIES.get(selected, [])
+
+        improved = deficit_after < deficit_before
+        worsened = deficit_after > deficit_before
+        signed = plasticity_rule in ("outcome_signed", "outcome_adaptive_signed")
+
+        # States that are "good when high" vs "bad when high"
+        GOOD_HIGH_CATEGORIES = {"oxytocin", "bonding"}
+        BAD_HIGH_CATEGORIES = {"fear", "cortisol", "stress", "child_need"}
+
+        def _delta_for_psych(category: str, key: str) -> float:
+            """
+            Signed update:
+            - For BAD-high states: on improvement -> decrease gains, increase decays.
+            - For GOOD-high states: on improvement -> increase gains, decrease decays.
+            Reverse directions on worsening.
+            Fallback: old symmetric rule if key is neither gain nor decay, or category unknown.
+            """
+            if not (improved or worsened):
+                return 0.0
+            if (category not in GOOD_HIGH_CATEGORIES) and (category not in BAD_HIGH_CATEGORIES):
+                # unknown valence: keep the original symmetric behavior
+                return learning_rate if improved else -learning_rate
+
+            is_good_high = category in GOOD_HIGH_CATEGORIES
+            is_decay = "decay" in key
+            is_gain = ("gain" in key) and not is_decay
+
+            if not (is_gain or is_decay):
+                # not a gain/decay parameter: use symmetric update
+                return learning_rate if improved else -learning_rate
+
+            # desired sign on improvement
+            if is_good_high:
+                # want state to be higher -> increase gains, decrease decays
+                sign = +1.0 if is_gain else -1.0
+            else:
+                # want state to be lower -> decrease gains, increase decays
+                sign = -1.0 if is_gain else +1.0
+
+            if worsened:
+                sign *= -1.0
+            return sign * learning_rate
+
+        for category in relevant_categories:
+            if category not in psych_plastic:
+                continue
+            for key in psych_plastic[category]:
+                if signed:
+                    psych_plastic[category][key] += _delta_for_psych(category, key)
+                else:
+                    if improved:
+                        psych_plastic[category][key] += learning_rate
+                    elif worsened:
+                        psych_plastic[category][key] -= learning_rate
+                _clamp_plastic_weight(psych_plastic, category, key)
+
+
+def _plasticity_deficit_now(mother, world, selected_motivation):
+    """Compute deficit using current world plasticity deficit signal setting."""
+    deficit_signal = getattr(world, "plasticity_deficit_signal", "global")
+    if deficit_signal == "local":
+        return compute_local_deficit(mother, selected_motivation)
+    return compute_overall_deficit(mother)
+
+
+def _plasticity_learning_rate_from(deficit_before: float, mother, world) -> float:
+    """Compute effective learning rate, matching update_plasticity() behavior."""
+    base_lr = getattr(mother, "learning_rate", 0.02)
+    plasticity_rule = getattr(world, "plasticity_rule", "outcome")
+    if plasticity_rule in ("outcome_adaptive", "outcome_adaptive_signed"):
+        lr_min = getattr(mother, "learning_rate_min", 0.002)
+        lr_max = getattr(mother, "learning_rate_max", 0.05)
+        deficit_scale = getattr(mother, "learning_deficit_scale", 2.0)
+        s = max(0.0, min(1.0, float(deficit_before) / float(deficit_scale)))
+        return float(lr_min + (lr_max - lr_min) * s)
+    return float(base_lr)
+
+
+def _plasticity_apply_u_update(mother, selected: str, improved: bool, worsened: bool, learning_rate: float, inputs_avg: dict):
+    """Apply u (motivation) plasticity update with the same thresholding/clamping."""
+    if selected not in getattr(mother, "motivation_weights_plastic", {}):
+        return
+    state_threshold = 0.25
+    mot_plastic = mother.motivation_weights_plastic
+    for key in mot_plastic[selected]:
+        input_value = float(inputs_avg.get(key, 0.0))
+        if input_value < state_threshold:
+            continue
+        if improved:
+            mot_plastic[selected][key] += learning_rate
+        elif worsened:
+            mot_plastic[selected][key] -= learning_rate
+        _clamp_plastic_weight(mot_plastic, selected, key)
+
+
+def _plasticity_apply_w_update(mother, selected: str, improved: bool, worsened: bool, learning_rate: float, world):
+    """Apply w (psych) plasticity update using the existing rule."""
+    learn_w = bool(getattr(world, "plasticity_learn_w", True))
+    if (not learn_w) or (not hasattr(mother, "psych_weights_plastic")):
+        return
+    plasticity_rule = getattr(world, "plasticity_rule", "outcome")
+    signed = plasticity_rule in ("outcome_signed", "outcome_adaptive_signed")
+    psych_plastic = mother.psych_weights_plastic
+    relevant_categories = MOTIVATION_TO_PSYCH_CATEGORIES.get(selected, [])
+
+    # States that are "good when high" vs "bad when high"
+    GOOD_HIGH_CATEGORIES = {"oxytocin", "bonding"}
+    BAD_HIGH_CATEGORIES = {"fear", "cortisol", "stress", "child_need"}
+
+    def _delta_for_psych(category: str, key: str) -> float:
+        if not (improved or worsened):
+            return 0.0
+        if (category not in GOOD_HIGH_CATEGORIES) and (category not in BAD_HIGH_CATEGORIES):
+            return learning_rate if improved else -learning_rate
+
+        is_good_high = category in GOOD_HIGH_CATEGORIES
+        is_decay = "decay" in key
+        is_gain = ("gain" in key) and not is_decay
+        if not (is_gain or is_decay):
+            return learning_rate if improved else -learning_rate
+
+        if is_good_high:
+            sign = +1.0 if is_gain else -1.0
+        else:
+            sign = -1.0 if is_gain else +1.0
+        if worsened:
+            sign *= -1.0
+        return sign * learning_rate
+
+    for category in relevant_categories:
+        if category not in psych_plastic:
+            continue
+        for key in psych_plastic[category]:
+            if signed:
+                psych_plastic[category][key] += _delta_for_psych(category, key)
+            else:
+                if improved:
+                    psych_plastic[category][key] += learning_rate
+                elif worsened:
+                    psych_plastic[category][key] -= learning_rate
+            _clamp_plastic_weight(psych_plastic, category, key)
+
+
+def _plasticity_segment_on_select(mother, world):
+    """
+    Segment-based credit assignment:
+    - 'segment': update weights only when motivation changes
+    - 'segment_capped': also update every K ticks if the same motivation persists
+
+    Deficit is evaluated at the *start* of a tick (after internal state updates),
+    which avoids blaming a motivation for movement/action costs before it has time to pay off.
+    """
+    update_mode = getattr(world, "plasticity_update_mode", "per_tick")
+    if update_mode not in ("segment", "segment_capped"):
+        return
+    if getattr(world, "plasticity_rule", None) is None:
+        return
+    if not hasattr(mother, "motivation_weights_plastic"):
+        return
+
+    current = mother.selected_motivation.lower() if mother.selected_motivation else None
+    if current is None:
+        return
+
+    # Initialize segment state on first call
+    if not hasattr(mother, "_plast_seg_mot"):
+        mother._plast_seg_mot = current
+        mother._plast_seg_deficit0 = _plasticity_deficit_now(mother, world, mother.selected_motivation)
+        mother._plast_seg_len = 0
+        mother._plast_seg_input_sum = {}
+        mother._plast_seg_input_n = 0
+
+    # Accumulate inputs for the current selected motivation (average over segment)
+    inputs = getattr(mother, "_last_motivation_inputs", None) or {}
+    cur_inputs = inputs.get(current, {}) if isinstance(inputs, dict) else {}
+    for k, v in cur_inputs.items():
+        mother._plast_seg_input_sum[k] = mother._plast_seg_input_sum.get(k, 0.0) + float(v)
+    mother._plast_seg_input_n = int(mother._plast_seg_input_n) + 1
+    mother._plast_seg_len = int(getattr(mother, "_plast_seg_len", 0)) + 1
+
+    prev = getattr(mother, "_plast_seg_mot", current)
+    kmax = int(getattr(world, "plasticity_segment_kmax", 20))
+    do_cap = (update_mode == "segment_capped") and (kmax > 0) and (mother._plast_seg_len >= kmax)
+    changed = (current != prev)
+
+    if not (changed or do_cap):
+        return
+
+    # Evaluate the segment that just ended (prev), using current deficit as end-of-segment value.
+    deficit0 = float(getattr(mother, "_plast_seg_deficit0", _plasticity_deficit_now(mother, world, mother.selected_motivation)))
+    deficit1 = float(_plasticity_deficit_now(mother, world, mother.selected_motivation))
+    improved = deficit1 < deficit0
+    worsened = deficit1 > deficit0
+    learning_rate = _plasticity_learning_rate_from(deficit0, mother, world)
+
+    n = max(1, int(getattr(mother, "_plast_seg_input_n", 1)))
+    inputs_avg = {k: float(v) / float(n) for k, v in (getattr(mother, "_plast_seg_input_sum", {}) or {}).items()}
+
+    # Apply updates to weights for the segment's motivation (prev)
+    _plasticity_apply_u_update(mother, prev, improved, worsened, learning_rate, inputs_avg)
+    _plasticity_apply_w_update(mother, prev, improved, worsened, learning_rate, world)
+
+    # Log diagnostics
+    mother._last_deficit_before = float(deficit0)
+    mother._last_deficit_after = float(deficit1)
+    mother._last_learning_rate_eff = float(learning_rate)
+    mother._last_plasticity_rule = getattr(world, "plasticity_rule", None)
+
+    # Start a new segment if changed; otherwise reset (cap) with current as new baseline.
+    mother._plast_seg_mot = current
+    mother._plast_seg_deficit0 = float(deficit1)
+    mother._plast_seg_len = 0
+    mother._plast_seg_input_sum = {}
+    mother._plast_seg_input_n = 0

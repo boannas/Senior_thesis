@@ -1,7 +1,42 @@
 /env311
+
+# Never commit git internals (accidental copy)
+.git copy/
+
+# Python bytecode / caches
+__pycache__/
 *.pyc
-*.pyc
-*.pyc
+*.pyo
+*.pyd
+
+# Generated experiment outputs (regenerate with baseline runners)
+test_results/
+
+# Figures from local runs
+plots/
+
+# Local / IDE
+.cursor/
+*.log
+run_log.csv
+/figures_agg
+/figures_agg_out_adp
+/figures_agg_out_loc
+/result_experiment
 *.csv
-*.csv
-*.csv
+*.json
+*.txt
+*.png
+/chunks_sweep
+/chunks_emergence
+pending_term_ab
+pending_term_aa
+pending_term_ac
+pending_term_ad
+pending_term_ae
+pending_term_af
+pending_term_ag
+pending_term_ah
+pending_term_ai
+pending_term_aj
+pending_term_ak

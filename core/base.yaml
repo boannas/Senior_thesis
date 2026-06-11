@@ -3,14 +3,14 @@
 # ==================================================================================
 simulation:
   # dt: .00125
-  dt: .05
+  dt: .01
   fps: 60   # Frames per second for rendering
   seed: 42  # Random seed for reproducibility
 
 grid:
   width: 10
   height: 10  
-  cell_px: 30
+  cell_px: 50
 
 colors:
   bg:   [255, 255, 255]       

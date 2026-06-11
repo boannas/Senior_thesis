@@ -31,42 +31,117 @@ def _flat_vals(d):
     return out
 
 
-def build_row(world):
-    """Build one row dict: tick, mother vars, child vars, u/w fixed/plastic."""
+def _mother_by_slot(world, i):
+    """Return mother with id M{i} if present, else None."""
+    mid = f"M{i}"
+    return next((m for m in world.mothers if m.id == mid), None)
+
+
+def _child_by_slot(world, i):
+    """Return child with id C{i} if present, else None."""
+    cid = f"C{i}"
+    return next((c for c in world.children if c.id == cid), None)
+
+
+def _motivation_u_dicts(mother):
+    """
+    Return (fixed_nested_dict, plastic_nested_dict) for CSV flattening.
+    Supports mother-plasticity agents (u_fixed / u_plastic) and baseline MotherAgent
+    (motivation_weights_fixed / motivation_weights_plastic).
+    """
+    if mother is None:
+        return None, None
+    if hasattr(mother, "u_fixed") and hasattr(mother, "u_plastic"):
+        return mother.u_fixed, mother.u_plastic
+    if hasattr(mother, "motivation_weights_fixed") and hasattr(mother, "motivation_weights_plastic"):
+        return mother.motivation_weights_fixed, mother.motivation_weights_plastic
+    return None, None
+
+
+def build_row(world, mother_slots=None, child_slots=None):
+    """Build one row dict: tick, mother vars, child vars, u/w fixed/plastic.
+    Uses agent id (M0, M1, C0, ...) so columns stay fixed when agents die.
+    mother_slots / child_slots: list of indices to output (e.g. [0,1,2]);
+    if None, use current world sizes so first row defines slots."""
+    if mother_slots is None:
+        mother_slots = list(range(len(world.mothers)))
+    if child_slots is None:
+        child_slots = list(range(len(world.children)))
+
     row = OrderedDict()
     row["tick"] = world.tick
-    for i, m in enumerate(world.mothers):
+    row["plasticity_this_tick"] = 1 if getattr(world, "_plasticity_this_tick", False) else 0
+
+    ref_mother = next((_mother_by_slot(world, s) for s in mother_slots), None)
+    for i in mother_slots:
+        m = _mother_by_slot(world, i)
         pre = f"m{i}_"
-        row[pre + "energy"] = m.energy
-        row[pre + "fatigue"] = m.fatigue
-        row[pre + "bonding"] = m.bonding
-        row[pre + "fear_threat"] = m.fear_threat
-        row[pre + "stress"] = m.stress
-        row[pre + "closeness_child"] = m.closeness_child
-        row[pre + "OT"] = m.OT
-        row[pre + "CORT"] = m.CORT
-        row[pre + "mot_Forage"] = m.motivations["Forage"]
-        row[pre + "mot_Care"] = m.motivations["Care"]
-        row[pre + "mot_Self"] = m.motivations["Self"]
-        row[pre + "mot_Protect"] = m.motivations["Protect"]
-        sel = max(m.motivations, key=m.motivations.get)
-        for mot in ("Forage", "Care", "Self", "Protect"):
-            row[pre + "sel_" + mot] = 1 if sel == mot else 0
-        if hasattr(m, "u_fixed"):
-            for k, v in zip(_flat_keys(m.u_fixed, pre + "u_fixed_"), _flat_vals(m.u_fixed)):
-                row[k] = v
-            for k, v in zip(_flat_keys(m.u_plastic, pre + "u_plastic_"), _flat_vals(m.u_plastic)):
-                row[k] = v
-        if hasattr(m, "w_fixed"):
-            for k, v in zip(_flat_keys(m.w_fixed, pre + "w_fixed_"), _flat_vals(m.w_fixed)):
-                row[k] = v
-            for k, v in zip(_flat_keys(m.w_plastic, pre + "w_plastic_"), _flat_vals(m.w_plastic)):
-                row[k] = v
-    for i, c in enumerate(world.children):
+        if m is None:
+            row[pre + "energy"] = ""
+            row[pre + "fatigue"] = ""
+            row[pre + "bonding"] = ""
+            row[pre + "fear_threat"] = ""
+            row[pre + "stress"] = ""
+            row[pre + "closeness_child"] = ""
+            row[pre + "OT"] = ""
+            row[pre + "CORT"] = ""
+            row[pre + "mot_Forage"] = ""
+            row[pre + "mot_Care"] = ""
+            row[pre + "mot_Self"] = ""
+            row[pre + "mot_Protect"] = ""
+            for mot in ("Forage", "Care", "Self", "Protect"):
+                row[pre + "sel_" + mot] = ""
+            uf, up = _motivation_u_dicts(ref_mother)
+            if uf is not None and up is not None:
+                for k in _flat_keys(uf, pre + "u_fixed_"):
+                    row[k] = ""
+                for k in _flat_keys(up, pre + "u_plastic_"):
+                    row[k] = ""
+            if ref_mother is not None and hasattr(ref_mother, "w_fixed"):
+                for k in _flat_keys(ref_mother.w_fixed, pre + "w_fixed_"):
+                    row[k] = ""
+                for k in _flat_keys(ref_mother.w_plastic, pre + "w_plastic_"):
+                    row[k] = ""
+        else:
+            row[pre + "energy"] = m.energy
+            row[pre + "fatigue"] = m.fatigue
+            row[pre + "bonding"] = m.bonding
+            row[pre + "fear_threat"] = m.fear_threat
+            row[pre + "stress"] = m.stress
+            row[pre + "closeness_child"] = m.closeness_child
+            # Compatibility: baseline uses oxytocin/cortisol; mother-plasticity uses OT/CORT
+            row[pre + "OT"] = getattr(m, "OT", getattr(m, "oxytocin", ""))
+            row[pre + "CORT"] = getattr(m, "CORT", getattr(m, "cortisol", ""))
+            row[pre + "mot_Forage"] = m.motivations["Forage"]
+            row[pre + "mot_Care"] = m.motivations["Care"]
+            row[pre + "mot_Self"] = m.motivations["Self"]
+            row[pre + "mot_Protect"] = m.motivations["Protect"]
+            sel = max(m.motivations, key=m.motivations.get)
+            for mot in ("Forage", "Care", "Self", "Protect"):
+                row[pre + "sel_" + mot] = 1 if sel == mot else 0
+            uf, up = _motivation_u_dicts(m)
+            if uf is not None and up is not None:
+                for k, v in zip(_flat_keys(uf, pre + "u_fixed_"), _flat_vals(uf)):
+                    row[k] = v
+                for k, v in zip(_flat_keys(up, pre + "u_plastic_"), _flat_vals(up)):
+                    row[k] = v
+            if hasattr(m, "w_fixed"):
+                for k, v in zip(_flat_keys(m.w_fixed, pre + "w_fixed_"), _flat_vals(m.w_fixed)):
+                    row[k] = v
+                for k, v in zip(_flat_keys(m.w_plastic, pre + "w_plastic_"), _flat_vals(m.w_plastic)):
+                    row[k] = v
+
+    for i in child_slots:
+        c = _child_by_slot(world, i)
         pre = f"c{i}_"
-        row[pre + "hunger"] = c.hunger
-        row[pre + "warmth"] = c.warmth
-        row[pre + "injury"] = c.injury
+        if c is None:
+            row[pre + "hunger"] = ""
+            row[pre + "warmth"] = ""
+            row[pre + "injury"] = ""
+        else:
+            row[pre + "hunger"] = c.hunger
+            row[pre + "warmth"] = c.warmth
+            row[pre + "injury"] = c.injury
     return row
 
 
@@ -75,7 +150,7 @@ class RunLogger:
     Log run to CSV and/or show realtime plots.
     mode: "csv" | "plot" | "both"
     """
-    def __init__(self, world, mode="csv", csv_path="run_log.csv", plot_interval=1):
+    def __init__(self, world, mode="csv", csv_path="run_log.csv", plot_interval=1, mother_slots=None, child_slots=None):
         self.world = world
         self.mode = mode.lower()
         self.csv_path = csv_path
@@ -83,6 +158,9 @@ class RunLogger:
         self._csv_file = None
         self._csv_writer = None
         self._header_written = False
+        # Slots fixed so columns stay M0,M1,M2 after deaths; from main or first update
+        self._mother_slots = mother_slots if mother_slots is not None else None
+        self._child_slots = child_slots if child_slots is not None else None
         self._plot_lines = {}
         self._figs = []
         self._axes = []
@@ -171,7 +249,11 @@ class RunLogger:
         self._csv_writer.writerow(row)
 
     def update(self):
-        row = build_row(self.world)
+        if self._mother_slots is None:
+            self._mother_slots = list(range(len(self.world.mothers)))
+        if self._child_slots is None:
+            self._child_slots = list(range(len(self.world.children)))
+        row = build_row(self.world, self._mother_slots, self._child_slots)
         if self.mode in ("csv", "both"):
             self._write_header_and_row(row)
         if self.mode in ("plot", "both") and HAS_MATPLOTLIB and self.world.tick % self.plot_interval == 0:
