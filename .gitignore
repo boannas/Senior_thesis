@@ -29,3 +29,5 @@ Sweep_results/
 *.json
 *.txt
 *.png
+*.pdf
+!Thesis_Report_Farao/AJ.Blink-Maternal_Instinct.pdf
