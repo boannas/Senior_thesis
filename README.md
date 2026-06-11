@@ -1,5 +1,7 @@
 # Maternal-instuition simulation
 
+![Overall diagram](Thesis_Report_Farao/image.png)
+
 Gridworld simulation with mother–child–threat dynamics, internal states, motivation selection, optional plasticity, and single-lineage evolution of motivation weights.
 
 **Thesis report:** [AJ.Blink — Maternal Instinct (PDF)](Thesis_Report_Farao/AJ.Blink-Maternal_Instinct.pdf)

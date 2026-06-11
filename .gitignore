@@ -29,6 +29,7 @@ Sweep_results/
 *.json
 *.txt
 *.png
+!Thesis_Report_Farao/image.png
 *.pdf
 !Thesis_Report_Farao/AJ.Blink-Maternal_Instinct.pdf
 # !Thesis_Report_Farao/Final_Defense_T_T.pdf
