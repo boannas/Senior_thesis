@@ -9,34 +9,23 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Generated experiment outputs (regenerate with baseline runners)
-test_results/
-
-# Figures from local runs
-plots/
-
 # Local / IDE
 .cursor/
 *.log
-run_log.csv
-/figures_agg
-/figures_agg_out_adp
-/figures_agg_out_loc
-/result_experiment
+
+# Generated run outputs (regenerate with scripts above)
+test_results/
+result_experiment/
+plots/
+figures_agg/
+figures_agg_out_adp/
+figures_agg_out_loc/
+chunks_sweep/
+chunks_emergence/
+FinalGenomeRollouts_normal/
+Baldwin_Experiment/
+Sweep_results/
 *.csv
 *.json
 *.txt
 *.png
-/chunks_sweep
-/chunks_emergence
-pending_term_ab
-pending_term_aa
-pending_term_ac
-pending_term_ad
-pending_term_ae
-pending_term_af
-pending_term_ag
-pending_term_ah
-pending_term_ai
-pending_term_aj
-pending_term_ak
